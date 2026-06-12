@@ -1,0 +1,3 @@
+# ComfyUI for Imagegen Mode, despite likely requiring ROCm
+
+Unlike the LLM Backends (ADR 0003, Vulkan/RADV), ComfyUI is kept as the Imagegen Mode backend even though community gfx1151 builds rely on ROCm via patched "TheRock" nightly builds rather than Vulkan. The alternative, `stable-diffusion.cpp`, would fit the Vulkan-only theme but has no documented OpenAI- or Automatic1111-compatible HTTP API, so it has no clean OpenWebUI integration — OpenWebUI's image-gen settings support ComfyUI, Automatic1111, and OpenAI Images natively, and OpenWebUI is the intended Client for image generation. ComfyUI's exact GPU backend and its coexistence with the Vulkan-based LLM Backends on the same unified-memory GPU remains to be validated when Imagegen Mode is built out.

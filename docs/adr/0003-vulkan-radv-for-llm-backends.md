@@ -1,0 +1,3 @@
+# Vulkan (RADV) as the GPU backend for the LLM Backends
+
+`llama-qwen35` and `llama-coder` use llama.cpp's Vulkan backend via Mesa's RADV driver, not ROCm. ROCm is currently unusable due to a library version mismatch (ROCm 6 expected by available llama.cpp images vs. system ROCm 7.1.1). Beyond that, community benchmarks for Strix Halo (gfx1151, see [amd-strix-halo-toolboxes](https://kyuz0.github.io/amd-strix-halo-toolboxes/)) show ROCm 7.2.3 and other ROCm builds offer no meaningful performance advantage over Vulkan when serving Qwen models — so this choice isn't expected to change even if the compatibility issue gets resolved. ComfyUI's GPU backend during Imagegen Mode is a separate, still-open question (see `CONTEXT.md`, "Imagegen Mode").
