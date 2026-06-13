@@ -27,6 +27,8 @@ services:
     command:
       - -m
       - /models/${QWEN35_MODEL_FILE}
+      - --mmproj
+      - /models/${QWEN35_MMPROJ_FILE}
       - --port
       - "8001"
       - --ctx-size

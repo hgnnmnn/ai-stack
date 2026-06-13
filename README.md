@@ -33,10 +33,16 @@ passes `-f` explicitly and overlays stub Backends instead (see
 ### Models
 
 Place the GGUF files under `MODELS_DIR` (e.g. `~/models`, mounted read-only
-into both Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE` at the
-filenames within it. For a model split into multiple shards, point at the
-first shard (`model-00001-of-000XX.gguf`) — llama.cpp finds the rest
-automatically.
+into both Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE` at their
+paths within it (subdirectories are fine, e.g.
+`unsloth/Qwen3-Coder-Next-GGUF/Qwen3-Coder-Next-UD-Q4_K_XL.gguf`). For a model
+split into multiple shards, point at the first shard
+(`model-00001-of-000XX.gguf`) — llama.cpp finds the rest automatically.
+
+`llama-qwen35` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal
+projector for its vision encoder (`--mmproj`) — without it the model still
+serves text but loses the "Multimodal" capability from `CONTEXT.md`.
+`llama-coder` has no projector and needs no equivalent variable.
 
 ### GPU passthrough GIDs
 
