@@ -1,0 +1,19 @@
+model_list:
+  - model_name: Qwen3.6-35B-A3B
+    litellm_params:
+      model: openai/Qwen3.6-35B-A3B
+      api_base: http://llama-qwen35:8001/v1
+      api_key: "not-needed"
+
+  - model_name: Qwen3-Coder-Next
+    litellm_params:
+      model: openai/Qwen3-Coder-Next
+      api_base: http://llama-coder:8002/v1
+      api_key: "not-needed"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Default batch interval is much longer; at this scale (single user/few
+  # friends) frequent small writes are cheap and give near-real-time spend data.
+  proxy_batch_write_at: 1

@@ -1,0 +1,36 @@
+# Stand-ins for the real llama.cpp Backends (issues #2/#3), used to test the
+# litellm Gateway's routing, Key scoping, and usage logging without a GPU.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+
+services:
+  llama-qwen35:
+    build: ./tests/stubs
+    environment:
+      STUB_MODEL_ID: Qwen3.6-35B-A3B
+      STUB_PORT: "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  llama-coder:
+    build: ./tests/stubs
+    environment:
+      STUB_MODEL_ID: Qwen3-Coder-Next
+      STUB_PORT: "8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  litellm:
+    depends_on:
+      llama-qwen35:
+        condition: service_healthy
+      llama-coder:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
