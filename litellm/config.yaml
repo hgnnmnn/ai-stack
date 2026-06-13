@@ -16,6 +16,10 @@ litellm_settings:
   # Prometheus scrapes /metrics directly (operational metrics only, no
   # secrets); the LAN-facing exposure is already covered by ADR 0001.
   require_auth_for_metrics_endpoint: false
+  # Clients (e.g. pi.dev) send OpenAI params like `reasoning_effort` that
+  # llama.cpp's OpenAI-compatible server doesn't support; drop them instead
+  # of erroring.
+  drop_params: true
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
