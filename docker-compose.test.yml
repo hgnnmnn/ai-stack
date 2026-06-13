@@ -5,7 +5,9 @@
 
 services:
   llama-qwen35:
+    image: ai-stack-llama-qwen35-stub
     build: ./tests/stubs
+    command: ["python", "/server.py"]
     environment:
       STUB_MODEL_ID: Qwen3.6-35B-A3B
       STUB_PORT: "8001"

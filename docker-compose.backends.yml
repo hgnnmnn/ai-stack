@@ -1,0 +1,52 @@
+# Real llama.cpp Backends (issues #2/#3) - GPU-passthrough services for the
+# Strix Halo iGPU (Vulkan/RADV, see ADR 0003). Host-specific (devices,
+# group_add GIDs, model paths), so kept out of docker-compose.yml: that file
+# stays portable and is what docker-compose.test.yml overlays with stub
+# Backends for ./tests/run.sh.
+#
+# Combine with docker-compose.yml for production:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.backends.yml up -d
+#
+# Or set COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml in .env
+# so plain `docker compose up -d` picks up both files (see .env.example).
+
+services:
+  llama-qwen35:
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID}"
+      - "${VIDEO_GID}"
+    volumes:
+      - ${MODELS_DIR}:/models:ro
+    command:
+      - -m
+      - /models/${QWEN35_MODEL_FILE}
+      - --port
+      - "8001"
+      - --ctx-size
+      - "65536"
+      - --flash-attn
+      - "on"
+      - --n-gpu-layers
+      - "999"
+      - --jinja
+      # f16 KV cache (llama-server default) - see ADR 0002.
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+  litellm:
+    depends_on:
+      llama-qwen35:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
