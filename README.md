@@ -19,8 +19,8 @@ litellm's virtual Keys and spend tracking and is not exposed outside the
 compose network.
 
 Run `make help` for shortcuts to the commands used throughout this doc
-(`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/`stats`/`test`/...). On a
-podman host, pass `COMPOSE="podman compose" CONTAINER_BIN=podman` to any
+(`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/`stats`/`monitoring`/`test`/...).
+On a podman host, pass `COMPOSE="podman compose" CONTAINER_BIN=podman` to any
 target.
 
 ## Backends
@@ -73,8 +73,9 @@ incrementally rather than all at once:
 3. `docker compose up -d llama-coder` to bring up both Backends together,
    then send a chat completion to `http://127.0.0.1:8002/v1/chat/completions`
    (issue #3 acceptance check).
-4. `docker compose up -d` for the rest of the stack (litellm, postgres,
-   prometheus, grafana).
+4. `docker compose up -d` for the rest of the stack (litellm, postgres).
+   Optional Grafana/Prometheus monitoring is layered on separately, see
+   [Monitoring](#monitoring).
 
 ### Memory budget
 
@@ -93,6 +94,16 @@ try it, edit `--ctx-size` in `docker-compose.backends.yml`, restart
 documented as feasible or not.
 
 ## Monitoring
+
+Grafana/Prometheus are optional and defined in `docker-compose.monitoring.yml`,
+kept out of the default `COMPOSE_FILE` so `make up` doesn't roll them out.
+Add them on top of the running stack with:
+
+```sh
+make monitoring
+```
+
+(`make monitoring-down` stops and removes just these two services.)
 
 - Grafana is LAN-facing on `:3000` (log in as `admin` / `GRAFANA_ADMIN_PASSWORD`).
   A Prometheus datasource is pre-provisioned and healthy on first boot.
