@@ -6,17 +6,22 @@ architecture decisions.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and fill in real values:
+1. `make env` (copies `.env.example` to `.env`) and fill in real values:
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
    - `POSTGRES_PASSWORD`: any strong random value
    - `GRAFANA_ADMIN_PASSWORD`: any strong random value
    - `MODELS_DIR`, `QWEN35_MODEL_FILE`, `CODER_MODEL_FILE`, `RENDER_GID`,
      `VIDEO_GID`: see [Backends](#backends)
-2. `docker compose up -d`
+2. `make up`
 
 The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001). Postgres backs
 litellm's virtual Keys and spend tracking and is not exposed outside the
 compose network.
+
+Run `make help` for shortcuts to the commands used throughout this doc
+(`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/`stats`/`test`/...). On a
+podman host, pass `COMPOSE="podman compose" CONTAINER_BIN=podman` to any
+target.
 
 ## Backends
 
@@ -59,10 +64,7 @@ getent group video | cut -d: -f3
 Per the original hardware plan (`planed-setup.md`), bring the Backends up
 incrementally rather than all at once:
 
-1. Verify Vulkan passthrough before starting either Backend:
-   ```sh
-   docker compose run --rm --entrypoint vulkaninfo llama-qwen35 --summary
-   ```
+1. Verify Vulkan passthrough before starting either Backend: `make vulkaninfo`
    should list the gfx1151 RADV device (ADR 0003). If `vulkaninfo` isn't in
    the image, `apt-get install -y vulkan-tools` in a one-off shell on the same
    image first.
@@ -82,11 +84,7 @@ estimates ~90GB combined at 65k/f16, within the 128GB unified memory budget —
 `llama-coder`'s q8 cache at 128k should use comparably less, but this needs
 confirming on real hardware.
 
-To measure with both Backends running:
-
-```sh
-docker stats --no-stream llama-qwen35 llama-coder
-```
+To measure with both Backends running: `make stats`.
 
 This also answers issue #3's open question: whether `llama-coder` can go from
 128k (`--ctx-size 131072`) to 256k (`262144`) within the remaining budget. To
@@ -128,7 +126,7 @@ The response's `key` field (`sk-...`) is the Client's credential. Revoke with
 ## Tests
 
 ```sh
-tests/run.sh
+make test
 ```
 
 Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
