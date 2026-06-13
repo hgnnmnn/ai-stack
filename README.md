@@ -9,11 +9,20 @@ architecture decisions.
 1. Copy `.env.example` to `.env` and fill in real values:
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
    - `POSTGRES_PASSWORD`: any strong random value
+   - `GRAFANA_ADMIN_PASSWORD`: any strong random value
 2. `docker compose up -d`
 
 The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001). Postgres backs
 litellm's virtual Keys and spend tracking and is not exposed outside the
 compose network.
+
+## Monitoring
+
+- Grafana is LAN-facing on `:3000` (log in as `admin` / `GRAFANA_ADMIN_PASSWORD`).
+  A Prometheus datasource is pre-provisioned and healthy on first boot.
+- Prometheus is Localhost-only on `:9090` and scrapes litellm's `/metrics`
+  endpoint (`litellm/config.yaml` enables the `prometheus` callback), giving
+  request count, latency, and error metrics per Model ID/Key.
 
 ## Issuing Keys
 
@@ -44,6 +53,6 @@ The response's `key` field (`sk-...`) is the Client's credential. Revoke with
 tests/run.sh
 ```
 
-Brings up litellm + Postgres alongside stub Backends (standing in for
-`llama-qwen35`/`llama-coder`, see `docker-compose.test.yml`) and runs the
-gateway test suite (`tests/gateway.bats`) against them.
+Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
+(standing in for `llama-qwen35`/`llama-coder`, see `docker-compose.test.yml`)
+and runs the test suites (`tests/*.bats`) against them.

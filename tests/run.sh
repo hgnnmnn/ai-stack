@@ -16,4 +16,4 @@ source tests/test.env
 set +a
 
 $COMPOSE up -d --build --wait
-bats tests/gateway.bats
+bats tests/*.bats
