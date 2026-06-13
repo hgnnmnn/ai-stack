@@ -44,9 +44,46 @@ services:
       retries: 10
       start_period: 300s
 
+  llama-coder:
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8002:8002"
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID}"
+      - "${VIDEO_GID}"
+    volumes:
+      - ${MODELS_DIR}:/models:ro
+    command:
+      - -m
+      - /models/${CODER_MODEL_FILE}
+      - --port
+      - "8002"
+      - --ctx-size
+      - "131072"
+      - --flash-attn
+      - "on"
+      - --n-gpu-layers
+      - "999"
+      - --cache-type-k
+      - q8_0
+      - --cache-type-v
+      - q8_0
+      - --jinja
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
   litellm:
     depends_on:
       llama-qwen35:
+        condition: service_healthy
+      llama-coder:
         condition: service_healthy
       postgres:
         condition: service_healthy

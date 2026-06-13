@@ -10,8 +10,8 @@ architecture decisions.
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
    - `POSTGRES_PASSWORD`: any strong random value
    - `GRAFANA_ADMIN_PASSWORD`: any strong random value
-   - `MODELS_DIR`, `QWEN35_MODEL_FILE`, `RENDER_GID`, `VIDEO_GID`: see
-     [Backends](#backends)
+   - `MODELS_DIR`, `QWEN35_MODEL_FILE`, `CODER_MODEL_FILE`, `RENDER_GID`,
+     `VIDEO_GID`: see [Backends](#backends)
 2. `docker compose up -d`
 
 The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001). Postgres backs
@@ -20,26 +20,28 @@ compose network.
 
 ## Backends
 
-`llama-qwen35` (Model ID `Qwen3.6-35B-A3B`, `:8001`) is defined in
-`docker-compose.backends.yml`, kept separate from `docker-compose.yml` because
-it's host-specific (GPU device, group IDs, model path) — see ADR 0003 for
-Vulkan/RADV vs. ROCm and ADR 0002 for the KV cache settings. `.env.example`
-sets `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml` so plain
-`docker compose up -d` includes it; `tests/run.sh` is unaffected since it
-passes `-f` explicitly and overlays a stub Backend instead (see
+`llama-qwen35` (Model ID `Qwen3.6-35B-A3B`, `:8001`) and `llama-coder` (Model ID
+`Qwen3-Coder-Next`, `:8002`) are defined in `docker-compose.backends.yml`, kept
+separate from `docker-compose.yml` because they're host-specific (GPU device,
+group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm and ADR 0002
+for the KV cache settings. `.env.example` sets
+`COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml` so plain
+`docker compose up -d` includes them; `tests/run.sh` is unaffected since it
+passes `-f` explicitly and overlays stub Backends instead (see
 [Tests](#tests)).
 
 ### Models
 
-Place the GGUF file under `MODELS_DIR` (e.g. `~/models`, mounted read-only
-into the Backend) and point `QWEN35_MODEL_FILE` at its filename. For a model
-split into multiple shards, point at the first shard
-(`model-00001-of-000XX.gguf`) — llama.cpp finds the rest automatically.
+Place the GGUF files under `MODELS_DIR` (e.g. `~/models`, mounted read-only
+into both Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE` at the
+filenames within it. For a model split into multiple shards, point at the
+first shard (`model-00001-of-000XX.gguf`) — llama.cpp finds the rest
+automatically.
 
 ### GPU passthrough GIDs
 
 `RENDER_GID`/`VIDEO_GID` are the host's `render`/`video` group IDs, added to
-the Backend container via `group_add` alongside `/dev/dri` passthrough:
+each Backend container via `group_add` alongside `/dev/dri` passthrough:
 
 ```sh
 getent group render | cut -d: -f3
@@ -48,10 +50,11 @@ getent group video | cut -d: -f3
 
 ### Bring-up order
 
-Per the original hardware plan (`planed-setup.md`), verify Vulkan passthrough
-before starting the Backend:
+Per the original hardware plan (`planed-setup.md`), bring the Backends up
+incrementally rather than all at once:
 
-1. ```sh
+1. Verify Vulkan passthrough before starting either Backend:
+   ```sh
    docker compose run --rm --entrypoint vulkaninfo llama-qwen35 --summary
    ```
    should list the gfx1151 RADV device (ADR 0003). If `vulkaninfo` isn't in
@@ -59,6 +62,31 @@ before starting the Backend:
    image first.
 2. `docker compose up -d llama-qwen35`, then send a chat completion to
    `http://127.0.0.1:8001/v1/chat/completions` (issue #2 acceptance check).
+3. `docker compose up -d llama-coder` to bring up both Backends together,
+   then send a chat completion to `http://127.0.0.1:8002/v1/chat/completions`
+   (issue #3 acceptance check).
+4. `docker compose up -d` for the rest of the stack (litellm, postgres,
+   prometheus, grafana).
+
+### Memory budget
+
+`llama-coder` runs with q8-quantized KV cache (k & v) to reach 128k context;
+`llama-qwen35` keeps f16 KV cache at 65k context (ADR 0002). `planed-setup.md`
+estimates ~90GB combined at 65k/f16, within the 128GB unified memory budget —
+`llama-coder`'s q8 cache at 128k should use comparably less, but this needs
+confirming on real hardware.
+
+To measure with both Backends running:
+
+```sh
+docker stats --no-stream llama-qwen35 llama-coder
+```
+
+This also answers issue #3's open question: whether `llama-coder` can go from
+128k (`--ctx-size 131072`) to 256k (`262144`) within the remaining budget. To
+try it, edit `--ctx-size` in `docker-compose.backends.yml`, restart
+`llama-coder`, and re-measure — 256k doesn't need to be the default, only
+documented as feasible or not.
 
 ## Monitoring
 
