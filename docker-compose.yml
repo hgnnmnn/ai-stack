@@ -8,7 +8,7 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/config.yaml:/app/config.yaml:ro,Z
     command: ["--config", "/app/config.yaml"]
     depends_on:
       postgres:
@@ -41,7 +41,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
       - prometheus-data:/prometheus
     depends_on:
       litellm:
@@ -61,7 +61,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,Z
       - grafana-data:/var/lib/grafana
     depends_on:
       prometheus:

@@ -13,7 +13,12 @@
 
 services:
   llama-qwen35:
-    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    # Pinned to b9570: builds b9592+ (incl. the floating "server-vulkan" tag
+    # as of 2026-06) ship a broken libggml-vulkan.so (undefined symbol
+    # matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data), which silently
+    # falls back to CPU-only ("no usable GPU found"). b9570 is the latest
+    # build that correctly detects the Vulkan/RADV device.
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
     restart: unless-stopped
     ports:
       - "127.0.0.1:8001:8001"
@@ -23,7 +28,7 @@ services:
       - "${RENDER_GID}"
       - "${VIDEO_GID}"
     volumes:
-      - ${MODELS_DIR}:/models:ro
+      - ${MODELS_DIR}:/models:ro,z
     command:
       - -m
       - /models/${QWEN35_MODEL_FILE}
@@ -38,6 +43,24 @@ services:
       - --n-gpu-layers
       - "999"
       - --jinja
+      - --spec-type
+      - draft-mtp
+      - --spec-draft-n-max
+      - "2"
+      # Thinking-mode sampling defaults recommended for Qwen3.6-35B-A3B
+      # general tasks.
+      - --temp
+      - "1.0"
+      - --top-p
+      - "0.95"
+      - --top-k
+      - "20"
+      - --min-p
+      - "0.0"
+      - --presence-penalty
+      - "1.5"
+      - --repeat-penalty
+      - "1.0"
       # f16 KV cache (llama-server default) - see ADR 0002.
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
@@ -47,7 +70,12 @@ services:
       start_period: 300s
 
   llama-coder:
-    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    # Pinned to b9570: builds b9592+ (incl. the floating "server-vulkan" tag
+    # as of 2026-06) ship a broken libggml-vulkan.so (undefined symbol
+    # matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data), which silently
+    # falls back to CPU-only ("no usable GPU found"). b9570 is the latest
+    # build that correctly detects the Vulkan/RADV device.
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
     restart: unless-stopped
     ports:
       - "127.0.0.1:8002:8002"
@@ -57,7 +85,7 @@ services:
       - "${RENDER_GID}"
       - "${VIDEO_GID}"
     volumes:
-      - ${MODELS_DIR}:/models:ro
+      - ${MODELS_DIR}:/models:ro,z
     command:
       - -m
       - /models/${CODER_MODEL_FILE}

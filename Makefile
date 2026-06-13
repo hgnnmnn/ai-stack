@@ -1,8 +1,14 @@
 # Shortcuts around `docker compose` for this stack. On a podman host, override
 # both on the command line, e.g.:
 #   make COMPOSE="podman compose" CONTAINER_BIN=podman up
-COMPOSE ?= docker compose
-CONTAINER_BIN ?= docker
+COMPOSE ?= podman-compose
+CONTAINER_BIN ?= podman
+
+# podman-compose (unlike docker compose) doesn't read COMPOSE_FILE from
+# .env, only from the shell environment. Load .env and export it so
+# COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml takes effect.
+-include .env
+export
 
 .DEFAULT_GOAL := help
 
