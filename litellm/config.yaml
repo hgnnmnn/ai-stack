@@ -4,12 +4,16 @@ model_list:
       model: openai/Qwen3.6-35B-A3B
       api_base: http://llama-qwen35:8001/v1
       api_key: "not-needed"
+      input_cost_per_token: 0.00000002
+      output_cost_per_token: 0.00000002
 
   - model_name: Qwen3-Coder-Next
     litellm_params:
       model: openai/Qwen3-Coder-Next
       api_base: http://llama-coder:8002/v1
       api_key: "not-needed"
+      input_cost_per_token: 0.00000002
+      output_cost_per_token: 0.00000002
 
 litellm_settings:
   callbacks: ["prometheus"]
