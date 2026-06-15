@@ -38,6 +38,14 @@ services:
             - "8001"
             - --ctx-size
             - "131072"
+            # 2 slots -> ~65536 ctx/slot, for concurrent users (issue: parallel
+            # request handling). Verified --spec-type draft-mtp works with
+            # --parallel > 1 on this llama.cpp build. 262144 (131072/slot) was
+            # tried and caused severe slowdowns under concurrent load (one
+            # slot dropped to ~6 t/s, swap usage doubled) - do not raise
+            # without addressing memory headroom first.
+            - --parallel
+            - "2"
             - --flash-attn
             - "on"
             - --n-gpu-layers
