@@ -20,6 +20,11 @@ services:
         # build that correctly detects the Vulkan/RADV device.
         image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
         restart: unless-stopped
+        # --mlock needs an unbounded memlock ulimit; the container default
+        # (~64 KB) is far too small to pin a multi-GB model and llama.cpp would
+        # fail with "failed to mlock ... Cannot allocate memory".
+        ulimits:
+            memlock: -1
         ports:
             - "127.0.0.1:8001:8001"
         devices:
@@ -38,18 +43,24 @@ services:
             - "8001"
             - --ctx-size
             - "131072"
-            # 2 slots -> ~65536 ctx/slot, for concurrent users (issue: parallel
-            # request handling). Verified --spec-type draft-mtp works with
-            # --parallel > 1 on this llama.cpp build. 262144 (131072/slot) was
-            # tried and caused severe slowdowns under concurrent load (one
-            # slot dropped to ~6 t/s, swap usage doubled) - do not raise
-            # without addressing memory headroom first.
+            # 1 slot -> full 131072 ctx/request and maximum MTP speedup (the
+            # spec-decode draft has the GPU to itself). Concurrent requests
+            # queue FIFO rather than running interleaved - fine at this scale
+            # (single user / few friends). --ctx-size is the TOTAL KV cache, so
+            # this costs the same VRAM as the old --parallel 2 (2x65536). Note
+            # 262144 here (f16 KV) was tried and caused severe slowdowns / swap
+            # under load - do not raise ctx-size without addressing headroom.
             - --parallel
-            - "2"
+            - "1"
             - --flash-attn
             - "on"
             - --n-gpu-layers
             - "999"
+            # Pin weights + KV in RAM so the kernel evicts page cache / other
+            # processes under memory pressure instead of swapping the model out
+            # (directly targets the swap-thrash seen under load on this
+            # unified-memory iGPU). Both Backends use it.
+            - --mlock
             - --jinja
             - --spec-type
             - draft-mtp
@@ -85,6 +96,9 @@ services:
         # build that correctly detects the Vulkan/RADV device.
         image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
         restart: unless-stopped
+        # --mlock needs an unbounded memlock ulimit (see llama-qwen35).
+        ulimits:
+            memlock: -1
         ports:
             - "127.0.0.1:8002:8002"
         devices:
@@ -99,12 +113,22 @@ services:
             - /models/${CODER_MODEL_FILE}
             - --port
             - "8002"
+            # 2 slots -> ~131072 ctx/slot for concurrent coding clients. ctx-size
+            # is the TOTAL KV cache, so keeping 262144 split across 2 slots uses
+            # the SAME q8 KV memory as the old single 262144 slot - no extra
+            # VRAM, just two 128k windows instead of one 256k window. KV stays
+            # q8-quantized (ADR 0002). To go back to a single 256k-context slot,
+            # drop --parallel.
             - --ctx-size
             - "262144"
+            - --parallel
+            - "2"
             - --flash-attn
             - "on"
             - --n-gpu-layers
             - "999"
+            # Pin weights + KV in RAM, same rationale as llama-qwen35.
+            - --mlock
             - --cache-type-k
             - q8_0
             - --cache-type-v
