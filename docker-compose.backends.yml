@@ -134,6 +134,12 @@ services:
             - --cache-type-v
             - q8_0
             - --jinja
+            - --temp
+            - "1.0"
+            - --top-p
+            - "0.95"
+            - --top-k
+            - "40"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s
