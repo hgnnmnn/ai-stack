@@ -61,6 +61,7 @@ services:
             # (directly targets the swap-thrash seen under load on this
             # unified-memory iGPU). Both Backends use it.
             - --mlock
+            - --no-mmap
             - --jinja
             - --spec-type
             - draft-mtp
@@ -129,6 +130,7 @@ services:
             - "999"
             # Pin weights + KV in RAM, same rationale as llama-qwen35.
             - --mlock
+            - --no-mmap
             - --cache-type-k
             - q8_0
             - --cache-type-v
