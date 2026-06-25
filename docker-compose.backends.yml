@@ -42,7 +42,7 @@ services:
             - --port
             - "8001"
             - --ctx-size
-            - "131072"
+            - "262144"
             # 1 slot -> full 131072 ctx/request and maximum MTP speedup (the
             # spec-decode draft has the GPU to itself). Concurrent requests
             # queue FIFO rather than running interleaved - fine at this scale
@@ -51,7 +51,7 @@ services:
             # 262144 here (f16 KV) was tried and caused severe slowdowns / swap
             # under load - do not raise ctx-size without addressing headroom.
             - --parallel
-            - "1"
+            - "2"
             - --flash-attn
             - "on"
             - --n-gpu-layers
