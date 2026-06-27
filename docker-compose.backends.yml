@@ -63,10 +63,10 @@ services:
             - --mlock
             - --no-mmap
             - --jinja
-            - --spec-type
-            - draft-mtp
-            - --spec-draft-n-max
-            - "2"
+            # - --spec-type
+            # - draft-mtp
+            # - --spec-draft-n-max
+            # - "2"
             # Thinking-mode sampling defaults recommended for Qwen3.6-35B-A3B
             # general tasks.
             - --temp
