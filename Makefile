@@ -42,10 +42,10 @@ config: ## Validate and print the merged compose config
 	$(COMPOSE) config
 
 vulkaninfo: ## Verify Vulkan/RADV passthrough (ADR 0003): make vulkaninfo [SERVICE=llama-coder]
-	$(COMPOSE) run --rm --entrypoint vulkaninfo $(or $(SERVICE),llama-qwen35) --summary
+	$(COMPOSE) run --rm --entrypoint vulkaninfo $(or $(SERVICE),llama-chat) --summary
 
 stats: ## Snapshot memory/CPU usage of both Backends (see README: Memory budget)
-	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-qwen35 llama-coder)
+	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-chat llama-coder)
 
 monitoring: ## Add optional Grafana/Prometheus monitoring on top of the running stack
 	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.monitoring.yml" $(COMPOSE) up -d

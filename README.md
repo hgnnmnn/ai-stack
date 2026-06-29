@@ -25,7 +25,7 @@ target.
 
 ## Backends
 
-`llama-qwen35` (Model ID `Qwen3.6-35B-A3B`, `:8001`) and `llama-coder` (Model ID
+`llama-chat` (Model ID `Qwen3.6-35B-A3B`, `:8001`) and `llama-coder` (Model ID
 `Qwen3-Coder-Next`, `:8002`) are defined in `docker-compose.backends.yml`, kept
 separate from `docker-compose.yml` because they're host-specific (GPU device,
 group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm and ADR 0002
@@ -44,7 +44,7 @@ paths within it (subdirectories are fine, e.g.
 split into multiple shards, point at the first shard
 (`model-00001-of-000XX.gguf`) — llama.cpp finds the rest automatically.
 
-`llama-qwen35` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal
+`llama-chat` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal
 projector for its vision encoder (`--mmproj`) — without it the model still
 serves text but loses the "Multimodal" capability from `CONTEXT.md`.
 `llama-coder` has no projector and needs no equivalent variable.
@@ -68,7 +68,7 @@ incrementally rather than all at once:
    should list the gfx1151 RADV device (ADR 0003). If `vulkaninfo` isn't in
    the image, `apt-get install -y vulkan-tools` in a one-off shell on the same
    image first.
-2. `docker compose up -d llama-qwen35`, then send a chat completion to
+2. `docker compose up -d llama-chat`, then send a chat completion to
    `http://127.0.0.1:8001/v1/chat/completions` (issue #2 acceptance check).
 3. `docker compose up -d llama-coder` to bring up both Backends together,
    then send a chat completion to `http://127.0.0.1:8002/v1/chat/completions`
@@ -80,7 +80,7 @@ incrementally rather than all at once:
 ### Memory budget
 
 `llama-coder` runs with q8-quantized KV cache (k & v) to reach 128k context;
-`llama-qwen35` keeps f16 KV cache at 65k context (ADR 0002). `planed-setup.md`
+`llama-chat` keeps f16 KV cache at 65k context (ADR 0002). `planed-setup.md`
 estimates ~90GB combined at 65k/f16, within the 128GB unified memory budget —
 `llama-coder`'s q8 cache at 128k should use comparably less, but this needs
 confirming on real hardware.
@@ -141,5 +141,5 @@ make test
 ```
 
 Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
-(standing in for `llama-qwen35`/`llama-coder`, see `docker-compose.test.yml`)
+(standing in for `llama-chat`/`llama-coder`, see `docker-compose.test.yml`)
 and runs the test suites (`tests/*.bats`) against them.

@@ -13,7 +13,7 @@ The LiteLLM proxy. Routes client requests to the correct Backend by Model ID, is
 _Avoid_: API Gateway, Proxy (ambiguous with Reverse Proxy)
 
 **Model ID**:
-The identifier clients pass in the `model` field of API requests, exposed by the Gateway. Matches the real upstream model name exactly (e.g. `Qwen3.6-35B-A3B`, `Qwen3-Coder-Next`) — distinct from a Backend's internal compose service name (e.g. `llama-qwen35`), which is plumbing only and never seen by clients.
+The identifier clients pass in the `model` field of API requests, exposed by the Gateway. Matches the real upstream model name exactly (e.g. `Qwen3.6-35B-A3B`, `Qwen3-Coder-Next`) — distinct from a Backend's internal compose service name (e.g. `llama-chat`), which is plumbing only and never seen by clients.
 _Avoid_: Model alias, model name (for the internal service name)
 
 **Reverse Proxy**:

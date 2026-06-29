@@ -12,7 +12,7 @@
 # so plain `docker compose up -d` picks up both files (see .env.example).
 
 services:
-    llama-qwen35:
+    llama-chat:
         # Pinned to b9570: builds b9592+ (incl. the floating "server-vulkan" tag
         # as of 2026-06) ship a broken libggml-vulkan.so (undefined symbol
         # matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data), which silently
@@ -97,7 +97,7 @@ services:
         # build that correctly detects the Vulkan/RADV device.
         image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
         restart: unless-stopped
-        # --mlock needs an unbounded memlock ulimit (see llama-qwen35).
+        # --mlock needs an unbounded memlock ulimit (see llama-chat).
         ulimits:
             memlock: -1
         ports:
@@ -128,7 +128,7 @@ services:
             - "on"
             - --n-gpu-layers
             - "999"
-            # Pin weights + KV in RAM, same rationale as llama-qwen35.
+            # Pin weights + KV in RAM, same rationale as llama-chat.
             - --mlock
             - --no-mmap
             - --cache-type-k
@@ -151,7 +151,7 @@ services:
 
     litellm:
         depends_on:
-            llama-qwen35:
+            llama-chat:
                 condition: service_healthy
             llama-coder:
                 condition: service_healthy

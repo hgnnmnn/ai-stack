@@ -52,7 +52,7 @@ Speicherbedarf parallel (je 65k Context, f16 KV-Cache): ~90 GB — passt in 128 
 
 | Service | Image | Port | Funktion |
 |---|---|---|---|
-| `llama-qwen35` | `ghcr.io/ggerganov/llama.cpp:server-vulkan` | 8001 | Qwen3.6-35B Inference |
+| `llama-chat` | `ghcr.io/ggerganov/llama.cpp:server-vulkan` | 8001 | Qwen3.6-35B Inference |
 | `llama-coder` | `ghcr.io/ggerganov/llama.cpp:server-vulkan` | 8002 | Qwen3-Coder Inference |
 | `litellm` | `ghcr.io/berriai/litellm:main-stable` | 4000 | API Gateway |
 | `comfyui` | `yanwk/comfyui-boot:latest` | 8188 | Bildgenerierung |
@@ -66,7 +66,7 @@ Speicherbedarf parallel (je 65k Context, f16 KV-Cache): ~90 GB — passt in 128 
 **LiteLLM Proxy** übernimmt:
 
 - **API-Key-Management** — pro User/Freund ein separater Key mit optional zugewiesenen Modellen
-- **Routing** — Anfragen werden anhand des Modellnamens an den zuständigen llama-server weitergeleitet (interne Docker-DNS-Namen, z.B. `http://llama-qwen35:8001/v1`)
+- **Routing** — Anfragen werden anhand des Modellnamens an den zuständigen llama-server weitergeleitet (interne Docker-DNS-Namen, z.B. `http://llama-chat:8001/v1`)
 - **Usage-Logging** — alle Requests werden protokolliert (SQLite lokal)
 - **Rate Limiting** — konfigurierbar pro Key
 - **OpenAI-kompatibler Endpunkt** — bestehende Tools und Clients ohne Anpassung nutzbar
@@ -127,7 +127,7 @@ Alle Ports binden auf `127.0.0.1` — einzige Ausnahme ist Port 4000, der für d
 ## Inbetriebnahme — Reihenfolge
 
 1. Vulkan-Passthrough im Container verifizieren (`vulkaninfo --summary` im `server-vulkan`-Container)
-2. `llama-qwen35` einzeln starten, Inference gegen `:8001` testen
+2. `llama-chat` einzeln starten, Inference gegen `:8001` testen
 3. `llama-coder` dazu starten, Speicherauslastung prüfen
 4. LiteLLM hochfahren, Routing gegen beide llama-Server testen
 5. Externer Proxy auf Port 4000 zeigen lassen, End-to-End-Test
