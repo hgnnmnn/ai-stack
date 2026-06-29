@@ -1,7 +1,9 @@
 # AI Stack
 
-Self-hosted LLM inference stack. See [`CONTEXT.md`](CONTEXT.md) for the glossary
-(Backend, Gateway, Model ID, Key, ...) and [`docs/adr/`](docs/adr/) for
+A self-hosted LLM inference stack: local model **Backends** exposed through a single
+**Gateway**, with optional **Imagegen Mode** (ComfyUI) and optional
+Grafana/Prometheus monitoring. See [`CONTEXT.md`](CONTEXT.md) for the glossary
+(Backend, Gateway, Model ID, Key, …) and [`docs/adr/`](docs/adr/) for
 architecture decisions.
 
 ## Setup
@@ -14,9 +16,11 @@ architecture decisions.
      `VIDEO_GID`: see [Backends](#backends)
 2. `make up`
 
-The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001). Postgres backs
-litellm's virtual Keys and spend tracking and is not exposed outside the
-compose network.
+The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001); the reverse proxy
+terminates TLS and forwards `/v1/*` to it. Postgres backs litellm's virtual Keys
+and spend tracking and is not exposed outside the compose network.
+
+All other components — Backends, ComfyUI, Prometheus — bind `127.0.0.1` only.
 
 Run `make help` for shortcuts to the commands used throughout this doc
 (`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/`stats`/`monitoring`/`test`/...).
@@ -25,29 +29,42 @@ target.
 
 ## Backends
 
-`llama-chat` (Model ID `Qwen3.6-35B-A3B`, `:8001`) and `llama-coder` (Model ID
-`Qwen3-Coder-Next`, `:8002`) are defined in `docker-compose.backends.yml`, kept
+`llama-chat` (Model ID `Ornith-1.0-35B`, `:8001`) and `llama-coder` (Model ID
+`Qwen-AgentWorld-35B-A3B`, `:8002`) are defined in `docker-compose.backends.yml`, kept
 separate from `docker-compose.yml` because they're host-specific (GPU device,
 group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm and ADR 0002
-for the KV cache settings. `.env.example` sets
+for the KV cache settings. The Backends pin to llama.cpp build **b9570**
+because builds b9592+ ship a broken `libggml-vulkan.so` that silently falls back
+to CPU — see comments in `docker-compose.backends.yml`.
+
+`.env.example` sets
 `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml` so plain
-`docker compose up -d` includes them; `tests/run.sh` is unaffected since it
+docker compose up -d includes them; `tests/run.sh` is unaffected since it
 passes `-f` explicitly and overlays stub Backends instead (see
 [Tests](#tests)).
+
+Both Backends run with **`--parallel 2`**, so the configured `ctx-size 262144`
+is split across two slots (~131k tokens per slot each).
 
 ### Models
 
 Place the GGUF files under `MODELS_DIR` (e.g. `~/models`, mounted read-only
 into both Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE` at their
-paths within it (subdirectories are fine, e.g.
-`unsloth/Qwen3-Coder-Next-GGUF/Qwen3-Coder-Next-UD-Q4_K_XL.gguf`). For a model
-split into multiple shards, point at the first shard
-(`model-00001-of-000XX.gguf`) — llama.cpp finds the rest automatically.
+paths within it (subdirectories are fine). For a model split into multiple
+shards, point at the first shard (`model-00001-of-000XX.gguf`) — llama.cpp finds
+the rest automatically.
 
-`llama-chat` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal
-projector for its vision encoder (`--mmproj`) — without it the model still
-serves text but loses the "Multimodal" capability from `CONTEXT.md`.
-`llama-coder` has no projector and needs no equivalent variable.
+**Current models:**
+
+| Backend | Model ID | Hugging Face |
+|---|---|---|
+| `llama-chat` | `Ornith-1.0-35B` | [deepreinforce-ai/Ornith-1.0-35B-GGUF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF) — agentic-coding reasoning model (MIT), post-trained on Gemma 4 & Qwen 3.5 via self-improving RL framework |
+| `llama-coder` | `Qwen-AgentWorld-35B-A3B` | [unsloth/Qwen-AgentWorld-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF) — native language world model for agentic environment simulation across 7 domains (MCP, Search, Terminal, SWE, Android, Web, OS), trained via CPT→SFT→RL pipeline }
+
+`llama-chat` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal projector
+for its vision encoder (`--mmproj`) — without it the model still serves text
+but loses the "Multimodal" capability from `CONTEXT.md`. `llama-coder` has no
+projector and needs no equivalent variable.
 
 ### GPU passthrough GIDs
 
@@ -77,21 +94,33 @@ incrementally rather than all at once:
    Optional Grafana/Prometheus monitoring is layered on separately, see
    [Monitoring](#monitoring).
 
+### Imagegen Mode (ComfyUI)
+
+Imagegen Mode (see `CONTEXT.md`) is a planned operating mode where ComfyUI runs
+(LAN-facing on port 8188) and both Backends' context shrinks to 32k to free
+memory for diffusion weights. Switching it on/off restarts the Backends, briefly
+interrupting any connected Client. See ADR 0004 for the rationale — ComfyUI is
+preferred despite likely requiring ROCm, because OpenWebUI has native image-gen
+dialogs for it (and none for `stable-diffusion.cpp`). Not yet part of the compose
+stack; the mode still needs to be wired up.
+
 ### Memory budget
 
-`llama-coder` runs with q8-quantized KV cache (k & v) to reach 128k context;
-`llama-chat` keeps f16 KV cache at 65k context (ADR 0002). `planed-setup.md`
-estimates ~90GB combined at 65k/f16, within the 128GB unified memory budget —
-`llama-coder`'s q8 cache at 128k should use comparably less, but this needs
-confirming on real hardware.
+Both Backends run with **ctx-size 262144**, split across **two slots** (~131k
+tokens/slot):
 
-To measure with both Backends running: `make stats`.
+- `llama-chat`: f16 KV cache → ~131k × 2 ≈ 256k at f16.
+- `llama-coder`: q8-quantized KV cache → same total KV footprint as f16/128k
+  for a single slot, so the two slots should use comparably less than
+  `llama-chat` (ADR 0002). Needs confirming on real hardware.
 
-This also answers issue #3's open question: whether `llama-coder` can go from
-128k (`--ctx-size 131072`) to 256k (`262144`) within the remaining budget. To
-try it, edit `--ctx-size` in `docker-compose.backends.yml`, restart
-`llama-coder`, and re-measure — 256k doesn't need to be the default, only
-documented as feasible or not.
+`planed-setup.md` estimates ~90GB combined at 65k/f16 — with ctx-size now 256k
+(2 × 131k) that budget is tight. To measure: `make stats`.
+
+`llama-coder` is currently at 256k (two × ~131k slots) which was tried and found
+viable on real hardware. To change it, edit `--ctx-size` in
+`docker-compose.backends.yml`, restart `llama-coder`, and re-measure with
+`make stats`.
 
 ## Monitoring
 
@@ -106,10 +135,12 @@ make monitoring
 (`make monitoring-down` stops and removes just these two services.)
 
 - Grafana is LAN-facing on `:3000` (log in as `admin` / `GRAFANA_ADMIN_PASSWORD`).
-  A Prometheus datasource is pre-provisioned and healthy on first boot.
-- Prometheus is Localhost-only on `:9090` and scrapes litellm's `/metrics`
-  endpoint (`litellm/config.yaml` enables the `prometheus` callback), giving
-  request count, latency, and error metrics per Model ID/Key.
+  A Prometheus datasource is pre-provisioned at `http://prometheus:9090`
+  (`grafana/provisioning/datasources/prometheus.yml`) and healthy on first boot.
+- Prometheus is Localhost-only on `127.0.0.1:9090` and scrapes litellm's
+  `/metrics` endpoint (`litellm/config.yaml` enables the `prometheus` callback
+  and sets `require_auth_for_metrics_endpoint: false`), giving request count,
+  latency, and error metrics per Model ID/Key.
 
 ## Issuing Keys
 
@@ -120,11 +151,15 @@ curl -X POST http://<host>:4000/key/generate \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "models": ["Qwen3.6-35B-A3B", "Qwen3-Coder-Next"],
+    - "models": ["Ornith-1.0-35B", "Qwen-AgentWorld-35B-A3B"],
     "rpm_limit": 60,
     "tpm_limit": 100000
   }'
 ```
+
+The Gateway is LAN-facing, so `http://<host>` is the machine's LAN IP when
+calling from other devices. The Master Key lives in `.env` (`LITELLM_MASTER_KEY`);
+it is referenced by litellm via `os.environ/LITELLM_MASTER_KEY`.
 
 - `models`: restricts the Key to these Model IDs; requests for any other
   Model ID are rejected (401/403).
