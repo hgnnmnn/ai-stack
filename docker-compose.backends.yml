@@ -37,19 +37,17 @@ services:
         command:
             - -m
             - /models/${QWEN35_MODEL_FILE}
-            - --mmproj
-            - /models/${QWEN35_MMPROJ_FILE}
+            # Qwen3.6 vision projector — Ornith-1.0-35B has no multimodal
+            # support; uncomment when switching back to Qwen3.6-35B-A3B.
+            # - --mmproj
+            # - /models/${QWEN35_MMPROJ_FILE}
             - --port
             - "8001"
             - --ctx-size
             - "262144"
-            # 1 slot -> full 131072 ctx/request and maximum MTP speedup (the
-            # spec-decode draft has the GPU to itself). Concurrent requests
-            # queue FIFO rather than running interleaved - fine at this scale
-            # (single user / few friends). --ctx-size is the TOTAL KV cache, so
-            # this costs the same VRAM as the old --parallel 2 (2x65536). Note
-            # 262144 here (f16 KV) was tried and caused severe slowdowns / swap
-            # under load - do not raise ctx-size without addressing headroom.
+            # --ctx-size is the TOTAL KV cache; with --parallel 2 each slot
+            # gets 131072. Concurrent requests queue FIFO rather than running
+            # interleaved — fine at this scale (single user / few friends).
             - --parallel
             - "2"
             - --flash-attn
@@ -63,25 +61,29 @@ services:
             - --mlock
             - --no-mmap
             - --jinja
+            # MTP — Ornith has no MTP heads; only relevant for Qwen3.6-35B-A3B.
             # - --spec-type
             # - draft-mtp
             # - --spec-draft-n-max
             # - "2"
-            # Thinking-mode sampling defaults recommended for Qwen3.6-35B-A3B
-            # general tasks.
+            # Ornith-1.0-35B recommended: temp=0.6, top-p=0.95, top-k=20.
+            # Previous Qwen3.6 thinking-mode defaults commented below.
             - --temp
-            - "1.0"
+            - "0.6"
             - --top-p
             - "0.95"
             - --top-k
             - "20"
             - --min-p
             - "0.0"
-            - --presence-penalty
-            - "1.5"
             - --repeat-penalty
             - "1.0"
-            # f16 KV cache (llama-server default) - see ADR 0002.
+            # q8_0 KV cache — safe for Ornith (no multimodal, see ADR 0002).
+            # Saves ~50% KV VRAM vs f16 default. Uncomment to enable.
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
