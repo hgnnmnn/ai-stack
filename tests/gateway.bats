@@ -2,31 +2,31 @@
 
 GATEWAY="http://localhost:4000"
 
-@test "chat completion with Model ID Qwen3.6-35B-A3B routes to the qwen35 backend" {
+@test "chat completion with Model ID llama-chat routes to the chat backend" {
   run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3.6-35B-A3B", "messages": [{"role": "user", "content": "hi"}]}'
+    -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}'
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"response from Qwen3.6-35B-A3B"* ]]
+  [[ "$output" == *"response from llama-chat"* ]]
 }
 
-@test "chat completion with Model ID Qwen3-Coder-Next routes to the coder backend" {
+@test "chat completion with Model ID llama-coder routes to the coder backend" {
   run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3-Coder-Next", "messages": [{"role": "user", "content": "hi"}]}'
+    -d '{"model": "llama-coder", "messages": [{"role": "user", "content": "hi"}]}'
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"response from Qwen3-Coder-Next"* ]]
+  [[ "$output" == *"response from llama-coder"* ]]
 }
 
 @test "a Key scoped to one Model ID is rejected for another Model ID" {
   run curl -sf -X POST "$GATEWAY/key/generate" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"models": ["Qwen3.6-35B-A3B"]}'
+    -d '{"models": ["llama-chat"]}'
   [ "$status" -eq 0 ]
 
   scoped_key=$(echo "$output" | jq -r '.key')
@@ -36,13 +36,13 @@ GATEWAY="http://localhost:4000"
   run curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $scoped_key" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3.6-35B-A3B", "messages": [{"role": "user", "content": "hi"}]}'
+    -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}'
   [ "$output" -eq 200 ]
 
   run curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $scoped_key" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3-Coder-Next", "messages": [{"role": "user", "content": "hi"}]}'
+    -d '{"model": "llama-coder", "messages": [{"role": "user", "content": "hi"}]}'
   [[ "$output" == "401" || "$output" == "403" ]]
 }
 
@@ -64,7 +64,7 @@ spend_log_count() {
   curl -sf -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3.6-35B-A3B", "messages": [{"role": "user", "content": "hi"}]}' >/dev/null
+    -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}' >/dev/null
 
   # LiteLLM flushes spend logs to the DB on a background interval, not synchronously.
   after="$before"

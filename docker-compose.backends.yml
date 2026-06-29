@@ -61,6 +61,12 @@ services:
             - --mlock
             - --no-mmap
             - --jinja
+            # Ornith emits <think>…</think>; split it into the response's
+            # reasoning_content field (auto = use the chat template's format)
+            # so Clients like OpenWebUI render a collapsible thinking block
+            # instead of inline tags.
+            - --reasoning-format
+            - auto
             # MTP — Ornith has no MTP heads; only relevant for Qwen3.6-35B-A3B.
             # - --spec-type
             # - draft-mtp
@@ -79,7 +85,7 @@ services:
             - --repeat-penalty
             - "1.0"
             # q8_0 KV cache — safe for Ornith (no multimodal, see ADR 0002).
-            # Saves ~50% KV VRAM vs f16 default. Uncomment to enable.
+            # Saves ~50% KV VRAM vs f16 default.
             - --cache-type-k
             - q8_0
             - --cache-type-v
@@ -138,12 +144,21 @@ services:
             - --cache-type-v
             - q8_0
             - --jinja
+            # AgentWorld is thinking-mode by default; split <think>…</think>
+            # into reasoning_content (same rationale as llama-chat).
+            - --reasoning-format
+            - auto
+            # Qwen-AgentWorld-35B-A3B recommended (thinking-mode by default):
+            # temp=0.6, top-p=0.95, top-k=20, min-p=0. The previous temp=1.0/
+            # top-k=40 were Qwen3-Coder-Next's values and no longer apply.
             - --temp
-            - "1.0"
+            - "0.6"
             - --top-p
             - "0.95"
             - --top-k
-            - "40"
+            - "20"
+            - --min-p
+            - "0.0"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s

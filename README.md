@@ -29,8 +29,9 @@ target.
 
 ## Backends
 
-`llama-chat` (Model ID `Ornith-1.0-35B`, `:8001`) and `llama-coder` (Model ID
-`Qwen-AgentWorld-35B-A3B`, `:8002`) are defined in `docker-compose.backends.yml`, kept
+`llama-chat` (Model ID `llama-chat`, `:8001`, currently serving `Ornith-1.0-35B`)
+and `llama-coder` (Model ID `llama-coder`, `:8002`, currently serving
+`Qwen-AgentWorld-35B-A3B`) are defined in `docker-compose.backends.yml`, kept
 separate from `docker-compose.yml` because they're host-specific (GPU device,
 group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm and ADR 0002
 for the KV cache settings. The Backends pin to llama.cpp build **b9570**
@@ -56,10 +57,13 @@ the rest automatically.
 
 **Current models:**
 
-| Backend | Model ID | Hugging Face |
+The Model ID stays a stable functional alias (`llama-chat`/`llama-coder`) so
+Clients and Keys don't change when the underlying model is swapped:
+
+| Model ID | Underlying model | Hugging Face |
 |---|---|---|
 | `llama-chat` | `Ornith-1.0-35B` | [deepreinforce-ai/Ornith-1.0-35B-GGUF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF) — agentic-coding reasoning model (MIT), post-trained on Gemma 4 & Qwen 3.5 via self-improving RL framework |
-| `llama-coder` | `Qwen-AgentWorld-35B-A3B` | [unsloth/Qwen-AgentWorld-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF) — native language world model for agentic environment simulation across 7 domains (MCP, Search, Terminal, SWE, Android, Web, OS), trained via CPT→SFT→RL pipeline }
+| `llama-coder` | `Qwen-AgentWorld-35B-A3B` | [unsloth/Qwen-AgentWorld-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF) — native language world model for agentic environment simulation across 7 domains (MCP, Search, Terminal, SWE, Android, Web, OS), trained via CPT→SFT→RL pipeline |
 
 `llama-chat` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal projector
 for its vision encoder (`--mmproj`) — without it the model still serves text
@@ -151,7 +155,7 @@ curl -X POST http://<host>:4000/key/generate \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    - "models": ["Ornith-1.0-35B", "Qwen-AgentWorld-35B-A3B"],
+    "models": ["llama-chat", "llama-coder"],
     "rpm_limit": 60,
     "tpm_limit": 100000
   }'

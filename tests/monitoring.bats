@@ -34,13 +34,13 @@ DS_UID="prometheus"
   curl -sf -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"model": "Qwen3.6-35B-A3B", "messages": [{"role": "user", "content": "hi"}]}' >/dev/null
+    -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}' >/dev/null
 
   # Prometheus scrapes litellm on a 15s interval.
   count=0
   for _ in $(seq 1 20); do
     run curl -sf -u "$GRAFANA_AUTH" \
-      --data-urlencode 'query=litellm_proxy_total_requests_metric_total{requested_model="Qwen3.6-35B-A3B"}' \
+      --data-urlencode 'query=litellm_proxy_total_requests_metric_total{requested_model="llama-chat"}' \
       "$GRAFANA/api/datasources/proxy/uid/$DS_UID/api/v1/query"
     [ "$status" -eq 0 ]
     count=$(echo "$output" | jq '.data.result | length')

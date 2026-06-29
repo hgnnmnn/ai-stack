@@ -9,7 +9,7 @@ services:
         build: ./tests/stubs
         command: ["python", "/server.py"]
         environment:
-            STUB_MODEL_ID: Qwen3.6-35B-A3B
+            STUB_MODEL_ID: llama-chat
             STUB_PORT: "8001"
         healthcheck:
             test:
@@ -28,7 +28,7 @@ services:
         build: ./tests/stubs
         command: ["python", "/server.py"]
         environment:
-            STUB_MODEL_ID: Qwen3-Coder-Next
+            STUB_MODEL_ID: llama-coder
             STUB_PORT: "8002"
         healthcheck:
             test:
