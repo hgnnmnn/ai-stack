@@ -42,7 +42,11 @@ config: ## Validate and print the merged compose config
 	$(COMPOSE) config
 
 vulkaninfo: ## Verify Vulkan/RADV passthrough (ADR 0003): make vulkaninfo [SERVICE=llama-coder]
-	$(COMPOSE) run --rm --entrypoint vulkaninfo $(or $(SERVICE),llama-chat) --summary
+	# The llama.cpp server-vulkan image ships libvulkan + the RADV ICD but not
+	# the vulkaninfo CLI itself, so install vulkan-tools in the ephemeral
+	# container before running it.
+	$(COMPOSE) run --rm --entrypoint sh $(or $(SERVICE),llama-chat) -c \
+		'apt-get update -qq && apt-get install -y -qq vulkan-tools >/dev/null && vulkaninfo --summary'
 
 stats: ## Snapshot memory/CPU usage of both Backends (see README: Memory budget)
 	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-chat llama-coder)
