@@ -1,0 +1,6 @@
+include:
+  - project: "to-be-continuous/renovate"
+    ref: "master"
+    file: "/templates/gitlab-ci-renovate.yml"
+    inputs:
+      autodiscover-filter: "selfhost-ai/ai-stack"
