@@ -9,6 +9,10 @@ services:
             DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
             STORE_MODEL_IN_DB: True
             AUTO_REDIRECT_UI_LOGIN_TO_SSO: true
+            # Prompt-caching experiment (see litellm/config.yaml cache_params).
+            REDIS_HOST: valkey
+            REDIS_PORT: 6379
+            REDIS_PASSWORD: ${VALKEY_PASSWORD}
         volumes:
             - ./litellm/config.yaml:/app/config.yaml:ro,Z
         command: ["--config", "/app/config.yaml"]
@@ -47,5 +51,29 @@ services:
             timeout: 5s
             retries: 5
 
+    # Prompt-caching experiment (issue TBD): exact-match cache for identical
+    # chat completion requests, so repeated prompts skip the Backends
+    # entirely. See litellm_settings.cache_params in litellm/config.yaml.
+    valkey:
+        image: valkey/valkey:8-alpine
+        restart: unless-stopped
+        command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD}"]
+        volumes:
+            - valkey-data:/data
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "valkey-cli",
+                    "-a",
+                    "${VALKEY_PASSWORD}",
+                    "--no-auth-warning",
+                    "ping",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
 volumes:
     postgres-data:
+    valkey-data:

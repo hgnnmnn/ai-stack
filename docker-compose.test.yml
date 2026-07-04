@@ -50,3 +50,5 @@ services:
                 condition: service_healthy
             postgres:
                 condition: service_healthy
+            valkey:
+                condition: service_healthy

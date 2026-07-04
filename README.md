@@ -126,6 +126,20 @@ viable on real hardware. To change it, edit `--ctx-size` in
 `docker-compose.backends.yml`, restart `llama-coder`, and re-measure with
 `make stats`.
 
+## Prompt caching (experimental, `test/valkey-prompt-cache`)
+
+`valkey` (a Redis fork) backs LiteLLM's exact-match request cache
+(`litellm_settings.cache_params` in `litellm/config.yaml`): identical
+`/v1/chat/completions` requests (same model, messages, and sampling params)
+are served straight from Valkey instead of round-tripping to a Backend.
+Set `VALKEY_PASSWORD` in `.env`.
+
+This is a test-branch experiment, not yet a settled decision — at this
+scale (single user/few friends, free local inference) exact-prompt cache
+hits are expected to be rare in normal chat/coding use, since the benefit
+mainly shows up with repeated identical prompts (e.g. shared system
+prompts, embeddings). See `tests/caching.bats` for a functional check.
+
 ## Monitoring
 
 Grafana/Prometheus are optional and defined in `docker-compose.monitoring.yml`,

@@ -25,6 +25,17 @@ litellm_settings:
     # of erroring.
     drop_params: true
 
+    # Prompt-caching experiment (test/valkey-prompt-cache): exact-match cache
+    # keyed on the request (model + messages + sampling params). Identical
+    # repeated requests are served from Valkey instead of hitting a Backend.
+    cache: True
+    cache_params:
+        type: redis
+        host: os.environ/REDIS_HOST
+        port: os.environ/REDIS_PORT
+        password: os.environ/REDIS_PASSWORD
+        ttl: 3600
+
 general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
     database_url: os.environ/DATABASE_URL
