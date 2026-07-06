@@ -11,14 +11,17 @@ architecture decisions.
 1. `make env` (copies `.env.example` to `.env`) and fill in real values:
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
    - `POSTGRES_PASSWORD`: any strong random value
+   - `VALKEY_PASSWORD`: any strong random value (prompt cache, see
+     [Prompt caching](#prompt-caching-experimental-testvalkey-prompt-cache))
    - `GRAFANA_ADMIN_PASSWORD`: any strong random value
-   - `MODELS_DIR`, `QWEN35_MODEL_FILE`, `CODER_MODEL_FILE`, `RENDER_GID`,
-     `VIDEO_GID`: see [Backends](#backends)
+   - `MODELS_DIR`, `QWEN35_MODEL_FILE`, `CODER_MODEL_FILE`, `FIM_MODEL_FILE`,
+     `RENDER_GID`, `VIDEO_GID`: see [Backends](#backends)
 2. `make up`
 
 The Gateway (litellm) is LAN-facing on `:4000` (see ADR 0001); the reverse proxy
-terminates TLS and forwards `/v1/*` to it. Postgres backs litellm's virtual Keys
-and spend tracking and is not exposed outside the compose network.
+terminates TLS and forwards `/v1/*` to it. Postgres (virtual Keys / spend
+tracking) and Valkey (prompt cache) back litellm and are not exposed outside the
+compose network.
 
 All other components — Backends, ComfyUI, Prometheus — bind `127.0.0.1` only.
 
@@ -29,14 +32,21 @@ target.
 
 ## Backends
 
-`llama-chat` (Model ID `llama-chat`, `:8001`, currently serving `Ornith-1.0-35B`)
-and `llama-coder` (Model ID `llama-coder`, `:8002`, currently serving
-`Qwen-AgentWorld-35B-A3B`) are defined in `docker-compose.backends.yml`, kept
-separate from `docker-compose.yml` because they're host-specific (GPU device,
-group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm and ADR 0002
-for the KV cache settings. The Backends pin to llama.cpp build **b9570**
-because builds b9592+ ship a broken `libggml-vulkan.so` that silently falls back
-to CPU — see comments in `docker-compose.backends.yml`.
+Three Backends are defined in `docker-compose.backends.yml`:
+
+- `llama-chat` (Model ID `llama-chat`, `:8001`, currently serving
+  `Ornith-1.0-35B`) — general chat/reasoning.
+- `llama-coder` (Model ID `llama-coder`, `:8002`, currently serving
+  `Qwen3.6-35B-A3B`) — coding, with MTP self-speculative decoding.
+- `llama-fim` (Model ID `llama-fim`, `:8004`, small base model) —
+  fill-in-the-middle autocomplete for editors (e.g. Zed's Edit Prediction),
+  served on the raw `/v1/completions` route with no chat template.
+
+They're kept separate from `docker-compose.yml` because they're host-specific
+(GPU device, group IDs, model paths) — see ADR 0003 for Vulkan/RADV vs. ROCm
+and ADR 0002 for the KV cache settings. The Backends pin to llama.cpp build
+**b9570** because builds b9592+ ship a broken `libggml-vulkan.so` that silently
+falls back to CPU — see comments in `docker-compose.backends.yml`.
 
 `.env.example` sets
 `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml` so plain
@@ -44,14 +54,16 @@ docker compose up -d includes them; `tests/run.sh` is unaffected since it
 passes `-f` explicitly and overlays stub Backends instead (see
 [Tests](#tests)).
 
-Both Backends run with **`--parallel 2`**, so the configured `ctx-size 262144`
-is split across two slots (~131k tokens per slot each).
+Slot layout differs per Backend: `llama-chat` runs **`--parallel 2`**, so its
+`ctx-size 262144` splits across two ~131k slots; `llama-coder` runs
+**`--parallel 1`** (MTP requires a single slot), giving one full 262k slot;
+`llama-fim` runs a single small 8k-context slot.
 
 ### Models
 
 Place the GGUF files under `MODELS_DIR` (e.g. `~/models`, mounted read-only
-into both Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE` at their
-paths within it (subdirectories are fine). For a model split into multiple
+into the Backends) and point `QWEN35_MODEL_FILE`/`CODER_MODEL_FILE`/`FIM_MODEL_FILE`
+at their paths within it (subdirectories are fine). For a model split into multiple
 shards, point at the first shard (`model-00001-of-000XX.gguf`) — llama.cpp finds
 the rest automatically.
 
@@ -63,12 +75,14 @@ Clients and Keys don't change when the underlying model is swapped:
 | Model ID | Underlying model | Hugging Face |
 |---|---|---|
 | `llama-chat` | `Ornith-1.0-35B` | [deepreinforce-ai/Ornith-1.0-35B-GGUF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF) — agentic-coding reasoning model (MIT), post-trained on Gemma 4 & Qwen 3.5 via self-improving RL framework |
-| `llama-coder` | `Qwen-AgentWorld-35B-A3B` | [unsloth/Qwen-AgentWorld-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF) — native language world model for agentic environment simulation across 7 domains (MCP, Search, Terminal, SWE, Android, Web, OS), trained via CPT→SFT→RL pipeline |
+| `llama-coder` | `Qwen3.6-35B-A3B` (MTP) | [unsloth/Qwen3.6-35B-A3B-MTP-GGUF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF) — 35B MoE (A3B active) with a bundled MTP head for self-speculative decoding and a vision encoder |
+| `llama-fim` | small base model (`FIM_MODEL_FILE`) | e.g. a `qwen2.5-coder-1.5b-base` GGUF — a base (non-instruct) model for fill-in-the-middle completions |
 
-`llama-chat` additionally loads `QWEN35_MMPROJ_FILE`, the multimodal projector
-for its vision encoder (`--mmproj`) — without it the model still serves text
-but loses the "Multimodal" capability from `CONTEXT.md`. `llama-coder` has no
-projector and needs no equivalent variable.
+The multimodal projector now belongs to `llama-coder`: it loads
+`CODER_MMPROJ_FILE` via `--mmproj` (Qwen3.6's vision encoder), giving it the
+"Multimodal" capability from `CONTEXT.md`. `llama-chat` (Ornith) has no vision
+encoder and runs text-only — its `--mmproj`/`QWEN35_MMPROJ_FILE` lines stay
+commented, ready for a swap back to Qwen3.6. `llama-fim` needs no projector.
 
 ### GPU passthrough GIDs
 
@@ -91,10 +105,11 @@ incrementally rather than all at once:
    image first.
 2. `docker compose up -d llama-chat`, then send a chat completion to
    `http://127.0.0.1:8001/v1/chat/completions` (issue #2 acceptance check).
-3. `docker compose up -d llama-coder` to bring up both Backends together,
-   then send a chat completion to `http://127.0.0.1:8002/v1/chat/completions`
-   (issue #3 acceptance check).
-4. `docker compose up -d` for the rest of the stack (litellm, postgres).
+3. `docker compose up -d llama-coder`, then send a chat completion to
+   `http://127.0.0.1:8002/v1/chat/completions` (issue #3 acceptance check).
+4. `docker compose up -d llama-fim`, then send a `/v1/completions` request to
+   `http://127.0.0.1:8004/v1/completions` (raw FIM prompt, no chat template).
+5. `docker compose up -d` for the rest of the stack (litellm, postgres, valkey).
    Optional Grafana/Prometheus monitoring is layered on separately, see
    [Monitoring](#monitoring).
 
@@ -110,21 +125,19 @@ stack; the mode still needs to be wired up.
 
 ### Memory budget
 
-Both Backends run with **ctx-size 262144**, split across **two slots** (~131k
-tokens/slot):
+`llama-chat` and `llama-coder` both run **ctx-size 262144** with an **f16 KV
+cache** (the q8_0 `--cache-type-k`/`-v` lines are present but commented in both,
+so either can be re-enabled to halve KV VRAM — ADR 0002):
 
-- `llama-chat`: f16 KV cache → ~131k × 2 ≈ 256k at f16.
-- `llama-coder`: q8-quantized KV cache → same total KV footprint as f16/128k
-  for a single slot, so the two slots should use comparably less than
-  `llama-chat` (ADR 0002). Needs confirming on real hardware.
+- `llama-chat`: 262k split across two ~131k slots (`--parallel 2`).
+- `llama-coder`: one full 262k slot (`--parallel 1`, required by MTP).
+- `llama-fim`: a single small 8k slot — negligible next to the two big models.
 
-`planed-setup.md` estimates ~90GB combined at 65k/f16 — with ctx-size now 256k
-(2 × 131k) that budget is tight. To measure: `make stats`.
-
-`llama-coder` is currently at 256k (two × ~131k slots) which was tried and found
-viable on real hardware. To change it, edit `--ctx-size` in
-`docker-compose.backends.yml`, restart `llama-coder`, and re-measure with
-`make stats`.
+`planed-setup.md` estimates ~90GB combined at 65k/f16 — with two models at 256k
+f16 plus the small FIM model, that budget is tight. To measure:
+`make stats` (covers all three Backends). To change a context window, edit
+`--ctx-size` in `docker-compose.backends.yml`, restart that Backend, and
+re-measure.
 
 ## Prompt caching (experimental, `test/valkey-prompt-cache`)
 
@@ -169,7 +182,7 @@ curl -X POST http://<host>:4000/key/generate \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "models": ["llama-chat", "llama-coder"],
+    "models": ["llama-chat", "llama-coder", "llama-fim"],
     "rpm_limit": 60,
     "tpm_limit": 100000
   }'
