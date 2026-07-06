@@ -86,10 +86,10 @@ services:
             - "1.0"
             # q8_0 KV cache — safe for Ornith (no multimodal, see ADR 0002).
             # Saves ~50% KV VRAM vs f16 default.
-            - --cache-type-k
-            - q8_0
-            - --cache-type-v
-            - q8_0
+            # - --cache-type-k
+            # - q8_0
+            # - --cache-type-v
+            # - q8_0
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
@@ -120,18 +120,23 @@ services:
         command:
             - -m
             - /models/${CODER_MODEL_FILE}
+            # Qwen3.6 vision projector — uncomment if vision input is wanted
+            # for this container too (mmproj-F32.gguf sits alongside the
+            # model file). Left disabled for now to keep the coder slot
+            # text-only and consistent with prior AgentWorld config.
+            - --mmproj
+            - /models/${CODER_MMPROJ_FILE}
             - --port
             - "8002"
-            # 2 slots -> ~131072 ctx/slot for concurrent coding clients. ctx-size
-            # is the TOTAL KV cache, so keeping 262144 split across 2 slots uses
-            # the SAME q8 KV memory as the old single 262144 slot - no extra
-            # VRAM, just two 128k windows instead of one 256k window. KV stays
-            # q8-quantized (ADR 0002). To go back to a single 256k-context slot,
-            # drop --parallel.
+            # MTP requires a single slot — parallel slots aren't supported
+            # alongside --spec-type draft-mtp yet. Dropped from 2 to 1;
+            # the full 262144 ctx-size now belongs to that one slot again
+            # (same as the pre-AgentWorld single-slot setup). Trade-off:
+            # lost 2-client concurrency, gained MTP self-speculative decode.
             - --ctx-size
             - "262144"
             - --parallel
-            - "2"
+            - "1"
             - --flash-attn
             - "on"
             - --n-gpu-layers
@@ -139,32 +144,87 @@ services:
             # Pin weights + KV in RAM, same rationale as llama-chat.
             - --mlock
             - --no-mmap
-            - --cache-type-k
-            - q8_0
-            - --cache-type-v
-            - q8_0
+            # - --cache-type-k
+            # - q8_0
+            # - --cache-type-v
+            # - q8_0
             - --jinja
-            # AgentWorld is thinking-mode by default; split <think>…</think>
-            # into reasoning_content (same rationale as llama-chat).
+            # Qwen3.6 emits <think>…</think>; split into reasoning_content
+            # (same rationale as llama-chat / previous AgentWorld config).
             - --reasoning-format
             - auto
-            # Qwen-AgentWorld-35B-A3B recommended (thinking-mode by default):
-            # temp=0.6, top-p=0.95, top-k=20, min-p=0. The previous temp=1.0/
-            # top-k=40 were Qwen3-Coder-Next's values and no longer apply.
+            # MTP self-speculative decoding — the MTP head tensors are
+            # bundled in this GGUF (unsloth combined _MTP package), so no
+            # separate -md/--model-draft path is needed. Start at 3; lower
+            # to 2 if draft acceptance is poor on your actual coding prompts
+            # (see llama-benchy comparison before committing to a value).
+            - --spec-type
+            - draft-mtp
+            - --spec-draft-n-max
+            - "3"
+            # Qwen3.6 coding-mode recommended (unchanged from AgentWorld
+            # config — same values apply): temp=0.6, top-p=0.95, top-k=20,
+            # min-p=0.
             - --temp
             - "0.6"
             - --top-p
-            - "0.95"
+            - "0.8"
             - --top-k
             - "20"
             - --min-p
             - "0.0"
+            - --presence-penalty
+            - "0.0"
+            - --repeat-penalty
+            - "1.0"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s
             timeout: 10s
             retries: 10
             start_period: 300s
+
+    llama-fim:
+        # Gleicher Vulkan-Pin wie llama-chat/llama-coder (siehe deren Kommentare
+        # zu b9570 / broken libggml-vulkan.so in b9592+).
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
+        restart: unless-stopped
+        ulimits:
+            memlock: -1
+        ports:
+            - "127.0.0.1:8004:8004"
+        devices:
+            - /dev/dri:/dev/dri
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        volumes:
+            - ${MODELS_DIR}:/models:ro,z
+        command:
+            - -m
+            - /models/${FIM_MODEL_FILE} # z.B. qwen2.5-coder-1.5b-base-q8_0.gguf
+            - --port
+            - "8004"
+            # Kein --jinja/Chat-Template — Zed spricht die reine
+            # /v1/completions-Route mit fertig formatiertem FIM-Prompt an.
+            - --ctx-size
+            - "8192"
+            - --n-gpu-layers
+            - "999"
+            - --flash-attn
+            - "on"
+            # Kleines Modell, KV-Cache muss hier nicht quantisiert werden.
+            - --mlock
+            - --no-mmap
+            # Reines Completion-only-Setup, kein Parallel-Slot-Bedarf.
+            - --parallel
+            - "1"
+        healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8004/health"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
+            start_period: 60s
 
     litellm:
         depends_on:

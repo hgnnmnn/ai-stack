@@ -6,7 +6,6 @@ model_list:
           api_key: "not-needed"
           input_cost_per_token: 0.00000002
           output_cost_per_token: 0.00000002
-
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder
@@ -14,20 +13,17 @@ model_list:
           api_key: "not-needed"
           input_cost_per_token: 0.00000002
           output_cost_per_token: 0.00000002
-
+    - model_name: llama-fim
+      litellm_params:
+          model: text-completion-openai/llama-fim
+          api_base: http://llama-fim:8004/v1
+          api_key: "not-needed"
+          input_cost_per_token: 0.00000002
+          output_cost_per_token: 0.00000002
 litellm_settings:
     callbacks: ["prometheus"]
-    # Prometheus scrapes /metrics directly (operational metrics only, no
-    # secrets); the LAN-facing exposure is already covered by ADR 0001.
     require_auth_for_metrics_endpoint: false
-    # Clients (e.g. pi.dev) send OpenAI params like `reasoning_effort` that
-    # llama.cpp's OpenAI-compatible server doesn't support; drop them instead
-    # of erroring.
     drop_params: true
-
-    # Prompt-caching experiment (test/valkey-prompt-cache): exact-match cache
-    # keyed on the request (model + messages + sampling params). Identical
-    # repeated requests are served from Valkey instead of hitting a Backend.
     cache: True
     cache_params:
         type: redis
@@ -35,10 +31,15 @@ litellm_settings:
         port: os.environ/REDIS_PORT
         password: os.environ/REDIS_PASSWORD
         ttl: 3600
-
+        # Zed's Edit Prediction hämmert /v1/completions bei praktisch jedem
+        # Tastendruck mit fast immer einzigartigem FIM-Prompt (Prefix/Suffix
+        # ändern sich ständig) — Cache-Trefferquote ~0, aber jede Anfrage würde
+        # trotzdem einen Redis-Write auslösen. supported_call_types beschränkt
+        # das Prompt-Caching auf Chat-Completions (llama-chat/llama-coder);
+        # atext_completion (= /v1/completions, das llama-fim nutzt) bleibt
+        # dadurch komplett vom Cache ausgenommen.
+        supported_call_types: ["acompletion"]
 general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
     database_url: os.environ/DATABASE_URL
-    # Default batch interval is much longer; at this scale (single user/few
-    # friends) frequent small writes are cheap and give near-real-time spend data.
     proxy_batch_write_at: 1

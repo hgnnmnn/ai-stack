@@ -49,7 +49,7 @@ vulkaninfo: ## Verify Vulkan/RADV passthrough (ADR 0003): make vulkaninfo [SERVI
 		'apt-get update -qq && apt-get install -y -qq vulkan-tools >/dev/null && vulkaninfo --summary'
 
 stats: ## Snapshot memory/CPU usage of both Backends (see README: Memory budget)
-	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-chat llama-coder)
+	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-chat llama-coder llama-fim)
 
 monitoring: ## Add optional Grafana/Prometheus monitoring on top of the running stack
 	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.monitoring.yml" $(COMPOSE) up -d
