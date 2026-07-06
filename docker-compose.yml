@@ -55,7 +55,7 @@ services:
     # chat completion requests, so repeated prompts skip the Backends
     # entirely. See litellm_settings.cache_params in litellm/config.yaml.
     valkey:
-        image: valkey/valkey:8-alpine
+        image: valkey/valkey:9-alpine
         restart: unless-stopped
         command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD}"]
         volumes:
