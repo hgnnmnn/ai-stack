@@ -2,7 +2,7 @@
   "id": null,
   "uid": "litellm-overview",
   "title": "LiteLLM / AI-Stack Overview",
-  "description": "Requests, latency, tokens, spend and cache metrics from the LiteLLM proxy (job=litellm).",
+  "description": "Requests, latency, tokens and spend metrics from the LiteLLM proxy (job=litellm).",
   "tags": ["ai-stack", "litellm"],
   "timezone": "browser",
   "editable": true,
@@ -208,33 +208,10 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 11,
-      "type": "gauge",
-      "title": "Cache Hit Ratio",
-      "gridPos": { "x": 0, "y": 28, "w": 8, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "100 * sum(rate(litellm_cache_hits_metric_total[5m])) / clamp_min(sum(rate(litellm_cache_hits_metric_total[5m])) + sum(rate(litellm_cache_misses_metric_total[5m])), 1e-9)"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 30 }, { "color": "green", "value": 60 }] }
-        },
-        "overrides": []
-      },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true }
-    },
-    {
       "id": 12,
       "type": "timeseries",
       "title": "Deployment Success vs Failure",
-      "gridPos": { "x": 8, "y": 28, "w": 8, "h": 8 },
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -256,7 +233,7 @@
       "type": "stat",
       "title": "Deployment State",
       "description": "0 = healthy, 1 = partial outage, 2 = complete outage",
-      "gridPos": { "x": 16, "y": 28, "w": 8, "h": 8 },
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
@@ -298,6 +275,23 @@
       "targets": [{ "refId": "A", "expr": "rate(process_cpu_seconds_total{job=\"litellm\"}[5m])", "legendFormat": "CPU" }],
       "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Generation Speed (tokens/s) by Model",
+      "description": "Average decode speed per request (count/sum of litellm_deployment_latency_per_output_token). Unlike a plain output-token rate, this isn't diluted by idle time between requests, so it reflects actual tokens/s while generating.",
+      "gridPos": { "x": 0, "y": 42, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_deployment_latency_per_output_token_count{litellm_model_name=~\"$model\"}[5m])) by (litellm_model_name) / sum(rate(litellm_deployment_latency_per_output_token_sum{litellm_model_name=~\"$model\"}[5m])) by (litellm_model_name)",
+          "legendFormat": "{{litellm_model_name}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
     }
   ]
 }
