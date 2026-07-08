@@ -1,0 +1,303 @@
+{
+  "id": null,
+  "uid": "litellm-overview",
+  "title": "LiteLLM / AI-Stack Overview",
+  "description": "Requests, latency, tokens, spend and cache metrics from the LiteLLM proxy (job=litellm).",
+  "tags": ["ai-stack", "litellm"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(litellm_proxy_total_requests_metric_total, requested_model)",
+        "query": {
+          "query": "label_values(litellm_proxy_total_requests_metric_total, requested_model)",
+          "refId": "StandardVariableQuery"
+        },
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "regex": "",
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Requests (1h)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(litellm_proxy_total_requests_metric_total{requested_model=~\"$model\"}[1h]))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "auto" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Error Rate",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(litellm_proxy_failed_requests_metric_total{requested_model=~\"$model\"}[5m])) / clamp_min(sum(rate(litellm_proxy_total_requests_metric_total{requested_model=~\"$model\"}[5m])) + sum(rate(litellm_proxy_failed_requests_metric_total{requested_model=~\"$model\"}[5m])), 1e-9)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 5 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "auto" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "In-Flight Requests",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "litellm_in_flight_requests" }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "auto" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Spend (24h)",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(litellm_spend_metric_total{requested_model=~\"$model\"}[24h]))" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 4, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "auto" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request Rate by Model",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_proxy_total_requests_metric_total{requested_model=~\"$model\"}[5m])) by (requested_model, status_code)",
+          "legendFormat": "{{requested_model}} ({{status_code}})"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Failed Requests by Route",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_proxy_failed_requests_metric_total{requested_model=~\"$model\"}[5m])) by (route, exception_class)",
+          "legendFormat": "{{route}} - {{exception_class}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "P95 LLM API Latency by Model",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(litellm_llm_api_latency_metric_bucket{model=~\"$model\"}[5m])) by (le, model))",
+          "legendFormat": "{{model}} p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum(rate(litellm_llm_api_latency_metric_bucket{model=~\"$model\"}[5m])) by (le, model))",
+          "legendFormat": "{{model}} p50"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "P95 Time to First Token by Model",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(litellm_llm_api_time_to_first_token_metric_bucket{model=~\"$model\"}[5m])) by (le, model))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Token Throughput by Model",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_input_tokens_metric_total{model=~\"$model\"}[5m])) by (model)",
+          "legendFormat": "{{model}} input"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(litellm_output_tokens_metric_total{model=~\"$model\"}[5m])) by (model)",
+          "legendFormat": "{{model}} output"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Spend Rate by Model ($/s)",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_spend_metric_total{model=~\"$model\"}[5m])) by (model)",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 11,
+      "type": "gauge",
+      "title": "Cache Hit Ratio",
+      "gridPos": { "x": 0, "y": 28, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(litellm_cache_hits_metric_total[5m])) / clamp_min(sum(rate(litellm_cache_hits_metric_total[5m])) + sum(rate(litellm_cache_misses_metric_total[5m])), 1e-9)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 30 }, { "color": "green", "value": 60 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Deployment Success vs Failure",
+      "gridPos": { "x": 8, "y": 28, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(litellm_deployment_success_responses_total{litellm_model_name=~\"$model\"}[5m])) by (litellm_model_name)",
+          "legendFormat": "{{litellm_model_name}} success"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(litellm_deployment_failure_responses_total{litellm_model_name=~\"$model\"}[5m])) by (litellm_model_name)",
+          "legendFormat": "{{litellm_model_name}} failure"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Deployment State",
+      "description": "0 = healthy, 1 = partial outage, 2 = complete outage",
+      "gridPos": { "x": 16, "y": 28, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "litellm_deployment_state",
+          "legendFormat": "{{litellm_model_name}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "Healthy", "color": "green" } } },
+            { "type": "value", "options": { "1": { "text": "Partial Outage", "color": "orange" } } },
+            { "type": "value", "options": { "2": { "text": "Complete Outage", "color": "red" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "value_and_name", "orientation": "horizontal" }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "LiteLLM Process Memory (RSS)",
+      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "process_resident_memory_bytes{job=\"litellm\"}", "legendFormat": "RSS" }],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "LiteLLM Process CPU Usage",
+      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "rate(process_cpu_seconds_total{job=\"litellm\"}[5m])", "legendFormat": "CPU" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}
