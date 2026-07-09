@@ -6,6 +6,41 @@ Grafana/Prometheus monitoring. See [`CONTEXT.md`](CONTEXT.md) for the glossary
 (Backend, Gateway, Model ID, Key, …) and [`docs/adr/`](docs/adr/) for
 architecture decisions.
 
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "External"
+        RP["Reverse Proxy\nTLS termination"]
+    end
+
+    subgraph "Host (Docker Compose)"
+        GW["Gateway: LiteLLM\nport 4000"]
+        PG["(Postgres 18)"]
+        VK["Valkey\nprompt cache"]
+        L1["llama-chat\nport 8001"]
+        L2["llama-coder\nport 8002"]
+        L3["llama-fim\nport 8004"]
+        PM["Prometheus\nport 9090"]
+        GF["Grafana\nport 3000"]
+
+        subgraph "GPU (Vulkan/RADV)"
+            L1
+            L2
+            L3
+        end
+    end
+
+    RP --> GW
+    GW --> L1
+    GW --> L2
+    GW --> L3
+    GW -.-> PG
+    GW -.-> VK
+    GW --> PM
+    PM --> GF
+```
+
 ## Setup
 
 1. `make env` (copies `.env.example` to `.env`) and fill in real values:
