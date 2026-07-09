@@ -12,7 +12,7 @@ export
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env up down restart logs ps pull config vulkaninfo stats monitoring monitoring-down test clean
+.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring logs ps pull config vulkaninfo stats monitoring monitoring-down test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -28,6 +28,21 @@ down: ## Stop the stack, keeping volumes
 
 restart: ## Restart the stack, or one service: make restart SERVICE=litellm
 	$(COMPOSE) restart $(SERVICE)
+
+# --- Restart groups (down && up per compose file) ---
+# Full stop/start cycle — picks up compose changes. Keeps volumes.
+
+restart-backend: ## Full restart of backends (docker-compose.backends.yml)
+	$(COMPOSE) -f docker-compose.backends.yml down
+	$(COMPOSE) -f docker-compose.backends.yml up -d
+
+restart-frontend: ## Full restart of frontend (docker-compose.yml)
+	$(COMPOSE) -f docker-compose.yml down
+	$(COMPOSE) -f docker-compose.yml up -d
+
+restart-monitoring: ## Full restart of monitoring (docker-compose.monitoring.yml)
+	$(COMPOSE) -f docker-compose.monitoring.yml down
+	$(COMPOSE) -f docker-compose.monitoring.yml up -d
 
 logs: ## Follow logs for the stack, or one service: make logs SERVICE=litellm
 	$(COMPOSE) logs -f $(SERVICE)
