@@ -36,11 +36,11 @@ services:
             - ${MODELS_DIR}:/models:ro,z
         command:
             - -m
-            - /models/${QWEN35_MODEL_FILE}
+            - /models/${CHAT_MODEL_FILE}
             # Qwen3.6 vision projector — Ornith-1.0-35B has no multimodal
             # support; uncomment when switching back to Qwen3.6-35B-A3B.
             # - --mmproj
-            # - /models/${QWEN35_MMPROJ_FILE}
+            # - /models/${CHAT_MMPROJ_FILE}
             - --port
             - "8001"
             - --ctx-size

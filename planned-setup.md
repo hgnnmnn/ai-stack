@@ -14,7 +14,7 @@ Build a fully containerized, locally-run LLM inference stack on an AMD Strix Hal
 | GPU | Integrated Radeon 8060S (RDNA 3.5, gfx1151) |
 | Memory | 128 GB unified LPDDR5X, shared between CPU and GPU |
 | Storage | ~168 GB GGUF models under `~/models` |
-| OS | Fedora Linux 44, Kernel 7.x, btrfs |
+| OS | Ubuntu 26.04 LTS (Resolute Raccoon), Kernel 7.x, ext4 |
 
 GPU access in the container is via `/dev/dri` device passthrough (Vulkan backend). ROCm is not usable due to a library incompatibility (ROCm 6 vs. system libs ROCm 7.1.1).
 
@@ -28,14 +28,15 @@ GPU access in the container is via `/dev/dri` device passthrough (Vulkan backend
 - Vulkan as the only working GPU backend on this hardware
 - No LM Studio in production — native llama-server processes in the container
 
-### Models (selection — two in parallel)
+### Models (three in parallel)
 
-| Model | Size | Type | Purpose |
-|---|---|---|---|
-| Qwen3.6-35B-A3B (Q6_K) | ~28 GB | MoE, Vision | Daily Driver, Multimodal |
-| Qwen3-Coder-Next (Q4_K_XL) | ~46 GB | MoE | Coding, agentic Tasks |
+| Model | Type | Purpose |
+|---|---|---|
+| Ornith-1.0-35B (Q6_K) | general chat/reasoning | Daily Driver |
+| Qwen3.6-35B-A3B-MTP (Q6_K) | MoE, self-speculative decoding | Coding, agentic Tasks |
+| qwen2.5-coder-1.5b-base (Q8_0) | small base model | Fill-in-the-middle |
 
-Memory usage in parallel (65k context each, f16 KV cache): ~90 GB — fits in 128 GB unified memory. When running image generation simultaneously, reduce context to 32k.
+Both big models run `--ctx-size 262144` (f16 KV cache); `make stats` measures actual memory usage. When running image generation simultaneously, reduce context to 32k.
 
 ---
 
@@ -52,9 +53,11 @@ Memory usage in parallel (65k context each, f16 KV cache): ~90 GB — fits in 12
 
 | Service | Image | Port | Function |
 |---|---|---|---|
-| `llama-chat` | `ghcr.io/ggerganov/llama.cpp:server-vulkan` | 8001 | Qwen3.6-35B Inference |
-| `llama-coder` | `ghcr.io/ggerganov/llama.cpp:server-vulkan` | 8002 | Qwen3-Coder Inference |
+| `llama-chat` | `ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570` | 8001 | Ornith-1.0-35B Inference |
+| `llama-coder` | `ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570` | 8002 | Qwen3.6-35B-A3B-MTP Inference |
+| `llama-fim` | `ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570` | 8004 | Fill-in-the-middle |
 | `litellm` | `ghcr.io/berriai/litellm:main-stable` | 4000 | API Gateway |
+| `postgres` | `postgres:18` | — | LiteLLM Keys/spend DB |
 | `comfyui` | `yanwk/comfyui-boot:latest` | 8188 | Image Generation |
 | `prometheus` | `prom/prometheus:latest` | 9090 | Metrics |
 | `grafana` | `grafana/grafana:latest` | 3000 | Monitoring Dashboard |
@@ -67,7 +70,7 @@ Memory usage in parallel (65k context each, f16 KV cache): ~90 GB — fits in 12
 
 - **API Key Management** — one key per user/friend, optionally assigned to specific models
 - **Routing** — requests are forwarded to the appropriate llama-server based on model name (internal Docker DNS names, e.g. `http://llama-chat:8001/v1`)
-- **Usage Logging** — all requests are logged (SQLite locally)
+- **Usage Logging** — all requests are logged (Postgres)
 - **Rate Limiting** — configurable per key
 - **OpenAI-compatible endpoint** — existing tools and clients usable without modification
 
@@ -77,7 +80,7 @@ User keys are created via LiteLLM REST API:
 ```bash
 curl -X POST http://localhost:4000/key/generate \
   -H "Authorization: Bearer <master-key>" \
-  -d '{"models": ["qwen3-35b", "coder"], "alias": "name"}'
+  -d '{"models": ["llama-chat", "llama-coder", "llama-fim"], "alias": "name"}'
 ```
 
 ---
