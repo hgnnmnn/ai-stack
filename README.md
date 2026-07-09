@@ -8,6 +8,21 @@ Grafana/Prometheus monitoring. See [`CONTEXT.md`](CONTEXT.md) for glossary
 (Backend, Gateway, Model ID, Key, ...) and [`docs/adr/`](docs/adr/) for
 architecture decisions.
 
+## Why
+
+This is my tinkering project around the [Framework Desktop Mainboard
+(AMD Ryzen AI Max 300 series)](https://frame.work/de/de/products/framework-desktop-mainboard-amd-ryzen-ai-max-300-series?v=FRAFMK0006).
+I'm getting hands-on experience running and serving local models, learning
+as I go, and continuously improving the stack. Mostly for fun.
+
+### Hardware
+
+- Board/APU: Framework Desktop Mainboard, AMD Ryzen AI Max 395, 128GB RAM
+- Case: Inter-Tech IPC Server 3U-3098-S
+- Fan: Noctua NF-A12x25 PWM, 120x120x25mm, 450-2000 RPM, 22.6 dB(A), brown/beige
+- PSU: be quiet! Power Zone 2 Modular, 750W, 80+ Platinum
+- Storage: Lexar NQ790 1TB, M.2 2280, PCIe 4.0 x4, 3D NAND
+
 ## Architecture
 
 ```mermaid
@@ -153,3 +168,14 @@ make test
 
 Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
 (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
+
+## Special thanks
+
+* [kyuzo](https://github.com/kyuzo) for the inspiration
+* [Wendel, and Level1Techs](https://level1techs.com/) for the inspiration
+* [litellm](https://github.com/level1techs/litellm) for the gateway
+* [lama.cpp](https://github.com/ggml-org/llama.cpp) for the great work
+
+
+## Additional info
+_you might see a sync of my private gitlab repo_
