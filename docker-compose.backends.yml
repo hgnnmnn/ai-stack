@@ -185,8 +185,8 @@ services:
             start_period: 300s
 
     llama-fim:
-        # Gleicher Vulkan-Pin wie llama-chat/llama-coder (siehe deren Kommentare
-        # zu b9570 / broken libggml-vulkan.so in b9592+).
+        # Same Vulkan pin as llama-chat/llama-coder (see their comments
+        # on b9570 / broken libggml-vulkan.so in b9592+).
         image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
         restart: unless-stopped
         ulimits:
@@ -202,21 +202,21 @@ services:
             - ${MODELS_DIR}:/models:ro,z
         command:
             - -m
-            - /models/${FIM_MODEL_FILE} # z.B. qwen2.5-coder-1.5b-base-q8_0.gguf
+            - /models/${FIM_MODEL_FILE} # e.g. qwen2.5-coder-1.5b-base-q8_0.gguf
             - --port
             - "8004"
-            # Kein --jinja/Chat-Template — Zed spricht die reine
-            # /v1/completions-Route mit fertig formatiertem FIM-Prompt an.
+            # No --jinja/chat template — Zed speaks the raw
+            # /v1/completions route with a pre-formatted FIM prompt.
             - --ctx-size
             - "8192"
             - --n-gpu-layers
             - "999"
             - --flash-attn
             - "on"
-            # Kleines Modell, KV-Cache muss hier nicht quantisiert werden.
+            # Small model, no need to quantize KV cache here.
             - --mlock
             - --no-mmap
-            # Reines Completion-only-Setup, kein Parallel-Slot-Bedarf.
+            # Pure completion-only setup, no parallel-slot need.
             - --parallel
             - "1"
         healthcheck:
