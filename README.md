@@ -1,5 +1,7 @@
 # AI Stack
 
+![Logo](assets/ai-stack-logo.jpeg)
+
 A self-hosted LLM inference stack: local model **Backends** exposed through a single
 **Gateway**, with optional **Imagegen Mode** (ComfyUI) and optional
 Grafana/Prometheus monitoring. See [`CONTEXT.md`](CONTEXT.md) for the glossary
