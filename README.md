@@ -171,9 +171,9 @@ Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
 
 ## Special thanks
 
-* [kyuzo](https://github.com/kyuzo) for the inspiration
+* [kyuzo](https://github.com/Kyuz0) for the inspiration
 * [Wendel, and Level1Techs](https://level1techs.com/) for the inspiration
-* [litellm](https://github.com/level1techs/litellm) for the gateway
+* [litellm](https://github.com/BerriAI/litellm) for the gateway
 * [lama.cpp](https://github.com/ggml-org/llama.cpp) for the great work
 
 
