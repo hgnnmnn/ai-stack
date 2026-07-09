@@ -124,8 +124,8 @@ services:
             # for this container too (mmproj-F32.gguf sits alongside the
             # model file). Left disabled for now to keep the coder slot
             # text-only and consistent with prior AgentWorld config.
-            - --mmproj
-            - /models/${CODER_MMPROJ_FILE}
+            # - --mmproj
+            # - /models/${CODER_MMPROJ_FILE}
             - --port
             - "8002"
             # MTP requires a single slot — parallel slots aren't supported
