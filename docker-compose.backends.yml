@@ -13,12 +13,14 @@
 
 services:
     llama-chat:
-        # Pinned to b9570: builds b9592+ (incl. the floating "server-vulkan" tag
-        # as of 2026-06) ship a broken libggml-vulkan.so (undefined symbol
-        # matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data), which silently
-        # falls back to CPU-only ("no usable GPU found"). b9570 is the latest
-        # build that correctly detects the Vulkan/RADV device.
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
+        # Pinned to b9755: the broken libggml-vulkan.so regression (undefined
+        # symbol matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data → silent
+        # CPU-only fallback) that affected b9592..~b9744 is fixed by b9755.
+        # Verified: `llama-server --list-devices` reports
+        # "Vulkan0: Radeon 8060S Graphics (RADV STRIX_HALO)". (Earlier pin was
+        # b9570, the last pre-regression build.) ROCm was trialled and rejected:
+        # the HIP backend holds the iGPU at max clock (~40 W) at idle.
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9755
         restart: unless-stopped
         # --mlock needs an unbounded memlock ulimit; the container default
         # (~64 KB) is far too small to pin a multi-GB model and llama.cpp would
@@ -98,12 +100,14 @@ services:
             start_period: 300s
 
     llama-coder:
-        # Pinned to b9570: builds b9592+ (incl. the floating "server-vulkan" tag
-        # as of 2026-06) ship a broken libggml-vulkan.so (undefined symbol
-        # matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data), which silently
-        # falls back to CPU-only ("no usable GPU found"). b9570 is the latest
-        # build that correctly detects the Vulkan/RADV device.
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
+        # Pinned to b9755: the broken libggml-vulkan.so regression (undefined
+        # symbol matmul_id_subgroup_q6_k_f32_dot2_aligned_f16acc_data → silent
+        # CPU-only fallback) that affected b9592..~b9744 is fixed by b9755.
+        # Verified: `llama-server --list-devices` reports
+        # "Vulkan0: Radeon 8060S Graphics (RADV STRIX_HALO)". (Earlier pin was
+        # b9570, the last pre-regression build.) ROCm was trialled and rejected:
+        # the HIP backend holds the iGPU at max clock (~40 W) at idle.
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9755
         restart: unless-stopped
         # --mlock needs an unbounded memlock ulimit (see llama-chat).
         ulimits:
@@ -185,9 +189,9 @@ services:
             start_period: 300s
 
     llama-fim:
-        # Same Vulkan pin as llama-chat/llama-coder (see their comments
-        # on b9570 / broken libggml-vulkan.so in b9592+).
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9570
+        # Same Vulkan pin as llama-chat/llama-coder (see their comment on
+        # b9755 / the fixed libggml-vulkan.so regression).
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b9755
         restart: unless-stopped
         ulimits:
             memlock: -1

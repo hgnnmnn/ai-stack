@@ -77,8 +77,8 @@ Backends, ComfyUI, Prometheus — binds `127.0.0.1` only.
 
 Defined in `docker-compose.backends.yml`, kept separate from
 `docker-compose.yml` since they're host-specific (GPU device, group IDs,
-model paths). Pinned to llama.cpp build **b9570** — b9592+ ships a broken
-`libggml-vulkan.so` that silently falls back to CPU.
+model paths). Pinned to llama.cpp build **b9755** — builds b9592–~b9744
+shipped a broken `libggml-vulkan.so` that silently falls back to CPU.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
@@ -88,8 +88,18 @@ model paths). Pinned to llama.cpp build **b9570** — b9592+ ships a broken
 
 Model ID stays a stable alias so Clients/Keys don't change when the
 underlying model is swapped. Both big Backends run `ctx-size 262144` with
-f16 KV cache (commented `q8_0` lines halve VRAM if needed — ADR 0002);
+f16 KV cache; commented `q8_0` lines halve VRAM if needed (ADR 0002).
 `llama-fim` runs a small 8k slot. `make stats` measures actual usage.
+
+Slot layout differs per Backend: `llama-chat` runs **`--parallel 2`**, so
+its `ctx-size 262144` splits across two ~131k slots; `llama-coder` runs
+**`--parallel 1`** (MTP requires a single slot), giving one full 262k slot;
+`llama-fim` runs a single small 8k-context slot.
+
+`.env.example` sets `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml`
+so plain `docker compose up -d` includes them; `tests/run.sh` is unaffected
+since it passes `-f` explicitly and overlays stub Backends (see
+[Tests](#tests)).
 
 ### Models
 
