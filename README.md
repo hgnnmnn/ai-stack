@@ -130,10 +130,25 @@ Set as `RENDER_GID`/`VIDEO_GID` in `.env`.
 
 #### Imagegen Mode (ComfyUI)
 
-Planned mode where ComfyUI runs (LAN-facing, port 8188) and both Backends'
-context shrinks to 32k to free memory for diffusion weights. Switching it
-on/off restarts the Backends. See ADR 0004 (ComfyUI over `stable-diffusion.cpp`
-for OpenWebUI's native image-gen dialogs). Not yet wired into the compose stack.
+Optional ComfyUI backend (LAN-facing, port 8188), defined in
+`docker-compose.comfyui.yml` and kept out of the default `COMPOSE_FILE` like
+monitoring:
+
+```sh
+make imagegen        # bring up (builds the ROCm image on first run)
+make imagegen-down   # tear down
+```
+
+Unlike the Vulkan LLM Backends, ComfyUI needs ROCm for the Strix Halo iGPU
+(gfx1151), so the compose file **builds** a TheRock/gfx1151 image (no
+compose-friendly one is published) — the first `make imagegen` takes several
+minutes. Point `COMFY_MODELS_DIR` (`.env`) at your diffusion weights
+(FLUX.1-schnell / SD3.5). See ADR 0004 (ComfyUI over `stable-diffusion.cpp` for
+OpenWebUI's native image-gen dialogs).
+
+When running image generation alongside the LLMs on this unified-memory GPU,
+shrink both Backends' context (e.g. to 32k) to free memory for diffusion
+weights, then `make restart-backend`.
 
 ### Monitoring
 

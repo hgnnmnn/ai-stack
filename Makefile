@@ -12,7 +12,7 @@ export
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring logs ps pull config vulkaninfo stats monitoring monitoring-down test clean
+.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring restart-imagegen logs ps pull config vulkaninfo stats monitoring monitoring-down imagegen imagegen-down test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -44,6 +44,10 @@ restart-monitoring: ## Full restart of monitoring (docker-compose.monitoring.yml
 	$(COMPOSE) -f docker-compose.monitoring.yml down
 	$(COMPOSE) -f docker-compose.monitoring.yml up -d
 
+restart-imagegen: ## Full restart of Imagegen Mode (docker-compose.comfyui.yml)
+	$(COMPOSE) -f docker-compose.comfyui.yml down
+	$(COMPOSE) -f docker-compose.comfyui.yml up -d
+
 logs: ## Follow logs for the stack, or one service: make logs SERVICE=litellm
 	$(COMPOSE) logs -f $(SERVICE)
 
@@ -71,6 +75,12 @@ monitoring: ## Add optional Grafana/Prometheus monitoring on top of the running 
 
 monitoring-down: ## Stop the optional Grafana/Prometheus monitoring services
 	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.monitoring.yml" $(COMPOSE) stop prometheus grafana
+
+imagegen: ## Add optional Imagegen Mode (ComfyUI, LAN :8188) on top; builds the ROCm image on first run
+	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.comfyui.yml" $(COMPOSE) up -d --build
+
+imagegen-down: ## Stop the optional Imagegen Mode (ComfyUI) service
+	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.comfyui.yml" $(COMPOSE) stop comfyui
 
 test: ## Run the integration test suite against stub Backends
 	tests/run.sh

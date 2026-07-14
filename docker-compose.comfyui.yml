@@ -1,0 +1,84 @@
+# Imagegen Mode — ComfyUI backend (ADR 0004), LAN-facing on :8188.
+#
+# Unlike the llama.cpp Backends (Vulkan/RADV, ADR 0003), ComfyUI needs ROCm for
+# the Strix Halo iGPU (gfx1151). No compose-friendly ROCm image is published, so
+# this builds one from the upstream TheRock/gfx1151 setup
+# (github.com/hec-ovi/comfyui-strix-docker), pinned to a commit for
+# reproducibility. The image bakes torch/torchvision/torchaudio from AMD's
+# gfx1151 nightly index and fails the build if a CPU-only torch slips in.
+#
+# Kept out of the default COMPOSE_FILE (like the monitoring overlay), so it only
+# runs when explicitly layered on:
+#
+#   make imagegen        # bring up (builds the image on first run)
+#   make imagegen-down   # tear down
+#
+# or: docker compose -f docker-compose.yml -f docker-compose.comfyui.yml up -d --build
+
+services:
+    comfyui:
+        build:
+            # Remote git build context, pinned to a commit. First `up` builds
+            # the ROCm/TheRock image (several minutes, ~GBs of wheels); it is
+            # then cached under the local tag below. Bump the sha to update.
+            context: https://github.com/hec-ovi/comfyui-strix-docker.git#35ae134b747cc873877d16b0d87d51cb2168276c
+        image: comfyui-strix-halo:latest
+        restart: unless-stopped
+        # LAN-facing (README: Imagegen Mode). ComfyUI has no auth of its own, so
+        # this is deliberately reachable on the LAN only — same posture as the
+        # Gateway/Grafana (ADR 0001, no host firewall, trusted LAN). The
+        # entrypoint launches `main.py --listen`, i.e. binds 0.0.0.0 inside the
+        # container. Front it with the external reverse proxy for remote access.
+        ports:
+            - "8188:8188"
+        # ROCm GPU passthrough: /dev/kfd is the compute interface (ROCm), on top
+        # of /dev/dri that the Vulkan Backends already use. Same host GIDs as the
+        # llama Backends (RENDER_GID/VIDEO_GID, see .env). If ROCm fails to init
+        # the GPU and silently falls back to CPU, add `privileged: true` here —
+        # some kernels need it for /dev/kfd; least-privilege devices+group_add is
+        # tried first.
+        devices:
+            - /dev/kfd:/dev/kfd
+            - /dev/dri:/dev/dri
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        security_opt:
+            - seccomp:unconfined
+        # ComfyUI spawns worker processes that share large tensors over /dev/shm;
+        # host IPC avoids the tiny default shm segment (VAE-decode OOM/hangs).
+        ipc: host
+        environment:
+            # gfx1151 (RDNA 3.5) ISA + unified-memory stability fixes. The image
+            # already defaults these; re-stated here so they're visible/tunable.
+            - HSA_OVERRIDE_GFX_VERSION=11.5.1
+            - HIP_VISIBLE_DEVICES=0
+        volumes:
+            # Diffusion weights (FLUX.1-schnell, SD3.5, …) — a dir of your own,
+            # separate from the LLM MODELS_DIR. See COMFY_MODELS_DIR in .env.
+            - ${COMFY_MODELS_DIR}:/app/ComfyUI/models
+            # Generated images, ComfyUI user settings/workflows, and the pip/uv
+            # + HF download cache — named volumes so the repo dir stays clean.
+            - comfyui-output:/app/ComfyUI/output
+            - comfyui-user:/app/ComfyUI/user
+            - comfyui-cache:/root/.cache
+        # Appended to the entrypoint's `main.py --listen --port 8188 …`. gfx1151
+        # tuning: --disable-mmap (mmap >64 GB is very slow on Strix Halo ROCm),
+        # --bf16-vae (avoid VAE-decode OOM), --cache-none (aggressive unified-mem
+        # reclaim). Drop any that hurt your workflows.
+        command:
+            - --disable-mmap
+            - --bf16-vae
+            - --cache-none
+        healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8188/"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
+            # Generous: first start also warms uv/torch imports on the iGPU.
+            start_period: 120s
+
+volumes:
+    comfyui-output:
+    comfyui-user:
+    comfyui-cache:
