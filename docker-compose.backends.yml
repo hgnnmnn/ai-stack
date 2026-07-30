@@ -88,10 +88,14 @@ services:
             - "1.0"
             # q8_0 KV cache — safe for Ornith (no multimodal, see ADR 0002).
             # Saves ~50% KV VRAM vs f16 default.
-            # - --cache-type-k
-            # - q8_0
-            # - --cache-type-v
-            # - q8_0
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
+            # ponytail: -ub 1024 unbenchmarked; verify with llama-bench vs
+            # default 512 before trusting the prompt-processing win.
+            - -ub
+            - "1024"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
@@ -148,10 +152,14 @@ services:
             # Pin weights + KV in RAM, same rationale as llama-chat.
             - --mlock
             - --no-mmap
-            # - --cache-type-k
-            # - q8_0
-            # - --cache-type-v
-            # - q8_0
+            # q8_0 KV cache — same rationale as llama-chat.
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
+            # ponytail: -ub 1024 unbenchmarked; see llama-chat comment.
+            - -ub
+            - "1024"
             - --jinja
             # Qwen3.6 emits <think>…</think>; split into reasoning_content
             # (same rationale as llama-chat / previous AgentWorld config).
@@ -223,6 +231,10 @@ services:
             # Pure completion-only setup, no parallel-slot need.
             - --parallel
             - "1"
+            # Zed's FIM prompts shift with the cursor; reuse the common KV
+            # prefix via context shifting instead of reprocessing it.
+            - --cache-reuse
+            - "256"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8004/health"]
             interval: 15s
