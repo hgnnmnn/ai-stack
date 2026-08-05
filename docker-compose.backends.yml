@@ -20,7 +20,7 @@ services:
         # "Vulkan0: Radeon 8060S Graphics (RADV STRIX_HALO)". (Earlier pin was
         # b9570, the last pre-regression build.) ROCm was trialled and rejected:
         # the HIP backend holds the iGPU at max clock (~40 W) at idle.
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10156
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10257
         restart: unless-stopped
         # --mlock needs an unbounded memlock ulimit; the container default
         # (~64 KB) is far too small to pin a multi-GB model and llama.cpp would
@@ -111,7 +111,7 @@ services:
         # "Vulkan0: Radeon 8060S Graphics (RADV STRIX_HALO)". (Earlier pin was
         # b9570, the last pre-regression build.) ROCm was trialled and rejected:
         # the HIP backend holds the iGPU at max clock (~40 W) at idle.
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10156
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10257
         restart: unless-stopped
         # --mlock needs an unbounded memlock ulimit (see llama-chat).
         ulimits:
@@ -199,7 +199,7 @@ services:
     llama-fim:
         # Same Vulkan pin as llama-chat/llama-coder (see their comment on
         # b9755 / the fixed libggml-vulkan.so regression).
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10156
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10257
         restart: unless-stopped
         ulimits:
             memlock: -1
