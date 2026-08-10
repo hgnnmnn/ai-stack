@@ -60,8 +60,8 @@ services:
             # processes under memory pressure instead of swapping the model out
             # (directly targets the swap-thrash seen under load on this
             # unified-memory iGPU). Both Backends use it.
-            - --mlock
-            - --no-mmap
+            - --load-mode
+            - mlock
             - --jinja
             # Ornith emits <think>…</think>; split it into the response's
             # reasoning_content field (auto = use the chat template's format)
@@ -150,8 +150,8 @@ services:
             - --n-gpu-layers
             - "999"
             # Pin weights + KV in RAM, same rationale as llama-chat.
-            - --mlock
-            - --no-mmap
+            - --load-mode
+            - mlock
             # q8_0 KV cache — same rationale as llama-chat.
             - --cache-type-k
             - q8_0
@@ -226,8 +226,8 @@ services:
             - --flash-attn
             - "on"
             # Small model, no need to quantize KV cache here.
-            - --mlock
-            - --no-mmap
+            - --load-mode
+            - mlock
             # Pure completion-only setup, no parallel-slot need.
             - --parallel
             - "1"
