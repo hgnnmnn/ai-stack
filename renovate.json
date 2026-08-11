@@ -6,12 +6,5 @@
       "/(^|/)docker-compose[^/]*\\.ya?ml$/"
     ]
   },
-  "reviewers": ["hgn"],
-  "packageRules": [
-    {
-      "matchManagers": ["docker-compose"],
-      "matchPackageNames": ["ghcr.io/ggml-org/llama.cpp"],
-      "enabled": false
-    }
-  ]
+  "reviewers": ["hgn"]
 }
