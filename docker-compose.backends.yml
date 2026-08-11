@@ -51,7 +51,7 @@ services:
             # gets 131072. Concurrent requests queue FIFO rather than running
             # interleaved — fine at this scale (single user / few friends).
             - --parallel
-            - "2"
+            - "4"
             - --flash-attn
             - "on"
             - --n-gpu-layers
@@ -77,15 +77,15 @@ services:
             # Ornith-1.0-35B recommended: temp=0.6, top-p=0.95, top-k=20.
             # Previous Qwen3.6 thinking-mode defaults commented below.
             - --temp
-            - "0.6"
+            - "0.7"
             - --top-p
-            - "0.95"
+            - "0.9"
             - --top-k
             - "20"
             - --min-p
             - "0.0"
             - --repeat-penalty
-            - "1.0"
+            - "1.05"
             # q8_0 KV cache — safe for Ornith (no multimodal, see ADR 0002).
             # Saves ~50% KV VRAM vs f16 default.
             - --cache-type-k
@@ -97,6 +97,11 @@ services:
             - -ub
             - "1024"
             - --reasoning-preserve
+            - --cont-batching
+            - --batch-size
+            - "1024"
+            - --ubatch-size
+            - "256"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
@@ -193,6 +198,11 @@ services:
             - --repeat-penalty
             - "1.0"
             - --reasoning-preserve
+            - --cont-batching
+            - --batch-size
+            - "1024"
+            - --ubatch-size
+            - "256"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s
