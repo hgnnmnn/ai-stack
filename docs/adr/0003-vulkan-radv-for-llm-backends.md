@@ -10,3 +10,9 @@ The version-mismatch argument above turns out to be sidesteppable: the official 
 2. **No performance upside.** Token generation on Vulkan/RADV was as fast or faster than the ROCm trial on our models, consistent with the community benchmarks cited above.
 
 So the decision stands, now backed by direct measurement rather than the compatibility argument alone. Separately, the Vulkan pin was bumped from **b9570** to **b9755**: b9755 fixes the broken `libggml-vulkan.so` regression that affected b9592–~b9744.
+
+## Update (2026-08): long-context prefill tradeoff noted, decision unchanged
+
+Community measurements ([Strix Halo Wiki, lhl, Nov 2025](https://llm-tracker.info/_TOORG/Strix-Halo)) on gfx1151 show the picture flips at deep context: at ~130k tokens, ROCm prefill (`pp512`) ran ~2.4x faster than Vulkan/RADV (40.6 vs 17.2 t/s on a 30B-A3B model), while RADV stayed ahead on generation (`tg128`) until a tuned ROCm build closed the gap. Both Backends here run `--ctx-size 262144`, i.e. squarely in the regime where that prefill gap would matter most (long agent/RAG prompts).
+
+This doesn't change the decision: the idle-power measurement above (ROCm/HIP holds the iGPU at ~40 W even fully idle, vs ~13 W for Vulkan/RADV) is a standing cost paid on every hour the Backend is up, not just during inference, and this stack runs the Backends continuously rather than on-demand. A prefill win only pays off if time-to-first-token at deep context is an actual observed pain point — it isn't currently. If that changes, the cheapest way to validate is a second container on a separate port (`ghcr.io/ggml-org/llama.cpp:server-rocm`, needs `/dev/kfd` in addition to `/dev/dri`) run side-by-side for A/B measurement, not a wholesale backend switch.

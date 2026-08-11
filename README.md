@@ -85,12 +85,12 @@ shipped a broken `libggml-vulkan.so` that silently falls back to CPU.
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
 | `llama-chat` | 8001 | `Ornith-1.0-35B` ([HF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF)) | general chat/reasoning, `--parallel 2` (two ~131k slots) |
-| `llama-coder` | 8002 | `Qwen3.6-35B-A3B` MTP ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, self-speculative decoding, `--parallel 1` (MTP needs a single slot) |
+| `llama-coder` | 8002 | `Qwen3.6-27B` MTP, dense ([HF](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)) | coding, self-speculative decoding, `--parallel 1` (MTP needs a single slot). Dense, not MoE — deliberate, see ADR 0005 |
 | `llama-fim` | 8004 | small base model (`FIM_MODEL_FILE`), e.g. `qwen2.5-coder-1.5b-base` | fill-in-the-middle, raw `/v1/completions`, no chat template |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
 underlying model is swapped. Both big Backends run `ctx-size 262144` with
-f16 KV cache; commented `q8_0` lines halve VRAM if needed (ADR 0002).
+q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002).
 `llama-fim` runs a small 8k slot. `make stats` measures actual usage.
 
 `.env.example` sets `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml`
@@ -118,6 +118,29 @@ getent group video | cut -d: -f3
 ```
 
 Set as `RENDER_GID`/`VIDEO_GID` in `.env`.
+
+#### Host kernel parameters (GTT)
+
+Strix Halo has no dedicated VRAM partition — the iGPU addresses system RAM
+through the Graphics Translation Table (GTT). Without a large-enough GTT
+window, the Vulkan driver only sees a few GB and large models fail to load
+or abort mid-load, independent of anything in the compose files. This host
+is booted with (`/proc/cmdline`):
+
+```
+amd_iommu=off amdgpu.gttsize=131072 ttm.pages_limit=33554432
+```
+
+`amdgpu.gttsize` is in MiB (131072 = 128 GiB, this host's full RAM — GTT is
+an addressing limit, not a hard reservation, so sizing it to total RAM is
+safe). `ttm.pages_limit` must cover at least the same amount in 4 KiB pages
+(33554432 × 4 KiB = 128 GiB) or large allocations fail even with a big
+`gttsize`. `amd_iommu=off` trades IOMMU protection for ~5–12% throughput on
+this platform ([kyuz0/amd-strix-halo-toolboxes issue #66](https://github.com/kyuz0/amd-strix-halo-toolboxes/issues/66));
+reasonable to accept on a single-tenant home host, worth reconsidering on a
+shared one. Set via the `GRUB_CMDLINE_LINUX_DEFAULT` kernel line and
+`grub2-mkconfig`/`update-grub`, then reboot — this only needs doing once
+per machine, not per container.
 
 #### Bring-up order
 

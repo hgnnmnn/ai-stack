@@ -129,10 +129,12 @@ services:
         command:
             - -m
             - /models/${CODER_MODEL_FILE}
-            # Qwen3.6 vision projector — uncomment if vision input is wanted
-            # for this container too (mmproj-F32.gguf sits alongside the
-            # model file). Left disabled for now to keep the coder slot
-            # text-only and consistent with prior AgentWorld config.
+            # No vision encoder: the active coder model is Qwen3.6-27B
+            # (dense, chosen over the MoE Qwen3-Coder-Next/30B-A3B on
+            # SWE-bench Verified — see ADR 0005), which ships text-only.
+            # CODER_MMPROJ_FILE still points at the older 35B-A3B package's
+            # projector for a future swap back to a vision-capable coder —
+            # do not uncomment against the current model, it won't match.
             # - --mmproj
             # - /models/${CODER_MMPROJ_FILE}
             - --port
