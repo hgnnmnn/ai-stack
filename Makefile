@@ -33,8 +33,8 @@ restart: ## Restart the stack, or one service: make restart SERVICE=litellm
 # Full stop/start cycle — picks up compose changes. Keeps volumes.
 
 restart-backend: ## Full restart of backends (docker-compose.backends.yml)
-	$(COMPOSE) -f docker-compose.backends.yml down
-	$(COMPOSE) -f docker-compose.backends.yml up -d
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.backends.yml down llama-chat llama-coder llama-fim litellm
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.backends.yml up -d --no-deps llama-chat llama-coder llama-fim litellm
 
 restart-frontend: ## Full restart of frontend (docker-compose.yml)
 	$(COMPOSE) -f docker-compose.yml down
