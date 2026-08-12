@@ -100,8 +100,6 @@ services:
             - --cont-batching
             - --batch-size
             - "1024"
-            - --ubatch-size
-            - "256"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
@@ -201,8 +199,6 @@ services:
             - --cont-batching
             - --batch-size
             - "1024"
-            - --ubatch-size
-            - "256"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s
