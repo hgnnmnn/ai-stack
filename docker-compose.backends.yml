@@ -13,7 +13,7 @@
 
 services:
     llama-chat:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10380
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10438
         restart: unless-stopped
         ulimits:
             memlock: -1
@@ -44,10 +44,10 @@ services:
             - --jinja
             - --reasoning-format
             - auto
-            # - --spec-type
-            # - draft-mtp
-            # - --spec-draft-n-max
-            # - "3"
+            - --spec-type
+            - draft-mtp
+            - --spec-draft-n-max
+            - "3"
             - --temp
             - "1.0"
             - --top-p
@@ -62,12 +62,9 @@ services:
             - q8_0
             - --cache-type-v
             - q8_0
-            - -ub
-            - "1024"
             - --reasoning-preserve
             - --cont-batching
-            - --batch-size
-            - "1024"
+            - --metrics
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
             interval: 15s
@@ -76,7 +73,7 @@ services:
             start_period: 300s
 
     llama-coder:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10380
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10438
         restart: unless-stopped
         ulimits:
             memlock: -1
@@ -95,7 +92,7 @@ services:
             - --port
             - "8002"
             - --ctx-size
-            - "524288"
+            - "262144"
             - --parallel
             - "2"
             - --flash-attn
@@ -108,15 +105,13 @@ services:
             - q8_0
             - --cache-type-v
             - q8_0
-            - -ub
-            - "1024"
             - --jinja
             - --reasoning-format
             - auto
             - --spec-type
             - draft-mtp
             - --spec-draft-n-max
-            - "3"
+            - "2"
             - --temp
             - "0.6"
             - --top-p
@@ -131,8 +126,7 @@ services:
             - "1.0"
             - --reasoning-preserve
             - --cont-batching
-            - --batch-size
-            - "1024"
+            - --metrics
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
             interval: 15s
@@ -141,7 +135,7 @@ services:
             start_period: 300s
 
     llama-fim:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10380
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10438
         restart: unless-stopped
         ulimits:
             memlock: -1
@@ -160,7 +154,7 @@ services:
             - --port
             - "8004"
             - --ctx-size
-            - "4096"
+            - "8192"
             - --n-gpu-layers
             - "999"
             - --flash-attn
@@ -175,6 +169,22 @@ services:
             - "1"
             - --cache-reuse
             - "256"
+            # Codestral's FIM format is Suffix-Prefix-Middle ([SUFFIX]...
+            # [PREFIX]...), not the Prefix-Suffix-Middle order llama.cpp
+            # assumes by default (and the previous Qwen2.5-Coder FIM model
+            # used) — required for both /infill and for building raw
+            # /v1/completions prompts by hand.
+            - --spm-infill
+            - --temp
+            - "0.2"
+            - --top-p
+            - "0.95"
+            - --top-k
+            - "20"
+            - --min-p
+            - "0.0"
+            - --repeat-penalty
+            - "1.0"
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8004/health"]
             interval: 15s

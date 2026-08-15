@@ -79,19 +79,34 @@ Backends, ComfyUI, Prometheus — binds `127.0.0.1` only.
 
 Defined in `docker-compose.backends.yml`, kept separate from
 `docker-compose.yml` since they're host-specific (GPU device, group IDs,
-model paths). Pinned to llama.cpp build **b9755** — builds b9592–~b9744
-shipped a broken `libggml-vulkan.so` that silently falls back to CPU.
+model paths). Pinned to a specific llama.cpp `server-vulkan` build
+(currently **b10438**; the tag is maintained by Renovate). The pin — rather
+than `latest` — dates back to builds b9592–~b9744, which shipped a broken
+`libggml-vulkan.so` that silently falls back to CPU; if a future bump
+misbehaves, check that library shipped intact before debugging elsewhere.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
-| `llama-chat` | 8001 | `Ornith-1.0-35B` ([HF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF)) | general chat/reasoning, `--parallel 2` (two ~131k slots) |
-| `llama-coder` | 8002 | `Qwen3.6-27B` MTP, dense ([HF](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)) | coding, self-speculative decoding, `--parallel 1` (MTP needs a single slot). Dense, not MoE — deliberate, see ADR 0005 |
-| `llama-fim` | 8004 | small base model (`FIM_MODEL_FILE`), e.g. `qwen2.5-coder-1.5b-base` | fill-in-the-middle, raw `/v1/completions`, no chat template |
+| `llama-chat` | 8001 | `Ornith-1.0-35B` ([HF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding |
+| `llama-coder` | 8002 | `Qwen3.6-27B` MTP, dense ([HF](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)) | coding, 256k ctx, `--parallel 2` (two ~131k slots), MTP self-speculative decoding (draft n-max 2). Dense, not MoE — deliberate, see ADR 0005 |
+| `llama-fim` | 8004 | `FIM_MODEL_FILE`, e.g. `Codestral-22B-v0.1` ([HF](https://huggingface.co/bartowski/Codestral-22B-v0.1-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Suffix-Prefix-Middle FIM order (`--spm-infill`, ADR 0006) — Clients must send `[SUFFIX]{suffix}[PREFIX]{prefix}`, not Qwen's `<\|fim_prefix\|>`/`<\|fim_suffix\|>`/`<\|fim_middle\|>` order |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
-underlying model is swapped. Both big Backends run `ctx-size 262144` with
-q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002).
-`llama-fim` runs a small 8k slot. `make stats` measures actual usage.
+underlying model is swapped. Both big Backends use a q8_0-quantized KV
+cache, halving KV VRAM vs. the f16 default (ADR 0002): `llama-chat` at
+`ctx-size 524288` (4 × ~131k slots), `llama-coder` at `ctx-size 262144`
+(2 × ~131k slots). `llama-fim` runs a q8_0-KV 8k slot, single parallel
+stream. `make stats` measures actual usage.
+
+#### Memory budget
+
+All three Backends run `--load-mode mlock` (with `ulimits.memlock: -1`),
+pinning model pages in RAM so the unified-memory iGPU never has to fault
+weights back in from disk. 35B + 27B + 22B of weights plus KV caches share
+this host's 128 GB pool, with ComfyUI's diffusion weights layered on top
+during Imagegen Mode (see [Imagegen Mode](#imagegen-mode-comfyui) — drop
+contexts to 32k first). `make stats` snapshots the real per-container
+memory/CPU usage.
 
 `.env.example` sets `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml`
 so plain `docker compose up -d` includes them; `tests/run.sh` is unaffected
@@ -104,11 +119,11 @@ Place GGUF files under `MODELS_DIR` (mounted read-only) and point
 `CHAT_MODEL_FILE`/`CODER_MODEL_FILE`/`FIM_MODEL_FILE` at them. For
 sharded models, point at the first shard (`model-00001-of-000XX.gguf`).
 
-The multimodal projector (`CODER_MMPROJ_FILE`, Qwen3.6's vision encoder)
-belongs to `llama-coder`, but its `--mmproj` lines are commented out for
-now, keeping that slot text-only. `llama-chat` (Ornith) has no vision
-encoder at all; its `--mmproj`/`CHAT_MMPROJ_FILE` lines stay commented
-for a future swap back to Qwen3.6. `llama-fim` needs no projector.
+No `--mmproj` flags are wired into `docker-compose.backends.yml` right
+now: `llama-coder` (Qwen3.6) has a vision encoder but is deliberately kept
+text-only, and `llama-chat` (Ornith) has none. `CHAT_MMPROJ_FILE` /
+`CODER_MMPROJ_FILE` remain defined in `.env.example` for a future swap to
+a vision-capable model. `llama-fim` needs no projector.
 
 #### GPU passthrough GIDs
 
