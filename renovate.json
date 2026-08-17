@@ -6,5 +6,12 @@
       "/(^|/)docker-compose[^/]*\\.ya?ml$/"
     ]
   },
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/ggml-org/llama.cpp"],
+      "versioning": "regex:^(?<compatibility>server-vulkan)-b(?<major>\\d+)$"
+    }
+  ],
   "reviewers": ["hgn"]
 }
