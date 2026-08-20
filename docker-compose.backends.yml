@@ -58,6 +58,8 @@ services:
             - "0.0"
             - --repeat-penalty
             - "1.0"
+            - --presence-penalty
+            - "1.5"
             - --cache-type-k
             - q8_0
             - --cache-type-v
@@ -112,8 +114,10 @@ services:
             - draft-mtp
             - --spec-draft-n-max
             - "2"
+            - --model-draft
+            - /models/unsloth/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf
             - --temp
-            - "0.6"
+            - "1.0"
             - --top-p
             - "0.95"
             - --top-k
@@ -125,6 +129,8 @@ services:
             - --repeat-penalty
             - "1.0"
             - --reasoning-preserve
+            - --chat-template-kwargs
+            - '{"reasoning_effort": "medium"}'
             - --cont-batching
             - --metrics
         healthcheck:
