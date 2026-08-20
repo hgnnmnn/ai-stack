@@ -13,7 +13,7 @@
 
 services:
     llama-chat:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10499
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524
         restart: unless-stopped
         ulimits:
             memlock: -1
@@ -73,7 +73,7 @@ services:
             start_period: 300s
 
     llama-coder:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10499
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524
         restart: unless-stopped
         ulimits:
             memlock: -1
@@ -135,7 +135,7 @@ services:
             start_period: 300s
 
     llama-fim:
-        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10499
+        image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524
         restart: unless-stopped
         ulimits:
             memlock: -1
