@@ -1,36 +1,89 @@
+# Nominal per-token pricing shared by all three local Backends. The models
+# cost nothing to run; the numbers exist so spend tracking and the Grafana
+# panels have non-zero values to aggregate.
+x-local-cost: &local-cost
+    input_cost_per_token: 0.00000002
+    output_cost_per_token: 0.00000002
+
+# max_input_tokens is the per-slot context, i.e. --ctx-size / --parallel from
+# docker-compose.backends.yml, NOT --ctx-size itself: a single request only
+# ever sees one slot. Verified against each Backend's /props (n_ctx).
+# max_parallel_requests mirrors --parallel so requests queue at the Gateway
+# instead of piling up inside llama.cpp.
+#
+# The supports_* flags drive the Model Hub "Features" column and what Clients
+# are told they may send. Both chat Backends run --jinja, so tool calling and
+# reasoning come from the model's own chat template; verified live against
+# each Backend (single + parallel tool call, reasoning_content present).
+# No supports_vision: both --mmproj lines in docker-compose.backends.yml are
+# commented out, so the Backends are text-only.
 model_list:
     - model_name: llama-chat
       litellm_params:
           model: openai/llama-chat
           api_base: http://llama-chat:8001/v1
           api_key: "not-needed"
-          input_cost_per_token: 0.00000002
-          output_cost_per_token: 0.00000002
+          max_parallel_requests: 4
+          timeout: 1800
+          <<: *local-cost
+      model_info:
+          mode: chat
+          max_input_tokens: 131072
+          supports_reasoning: true
+          supports_function_calling: true
+          supports_parallel_function_calling: true
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder
           api_base: http://llama-coder:8002/v1
           api_key: "not-needed"
-          input_cost_per_token: 0.00000002
-          output_cost_per_token: 0.00000002
+          max_parallel_requests: 1
+          timeout: 1800
+          <<: *local-cost
+      model_info:
+          mode: chat
+          max_input_tokens: 262144
+          supports_reasoning: true
+          supports_function_calling: true
+          supports_parallel_function_calling: true
     - model_name: llama-fim
       litellm_params:
           model: text-completion-openai/llama-fim
           api_base: http://llama-fim:8004/v1
           api_key: "not-needed"
-          input_cost_per_token: 0.00000002
-          output_cost_per_token: 0.00000002
+          max_parallel_requests: 1
+          timeout: 120
+          <<: *local-cost
+      model_info:
+          # Raw /v1/completions against a base model: no chat template, so no
+          # tool calling and no reasoning.
+          mode: completion
+          max_input_tokens: 8192
 litellm_settings:
     callbacks: ["prometheus"]
     require_auth_for_metrics_endpoint: false
     drop_params: true
-    cache: True
+    # Exact-match response cache across every deployment, including the ones
+    # managed in the DB rather than here. supported_call_types is deliberately
+    # left at its default so all of them are covered (chat, raw completions,
+    # embeddings, rerank, responses) instead of a list that goes stale when a
+    # Backend is added.
+    #
+    # Two consequences worth knowing. An identical request replays the stored
+    # answer for the whole ttl, so "regenerate" in a Client returns the same
+    # text even at --temp 1.0. And `type: local` is an in-process LRU that
+    # LiteLLM builds with its own defaults: 200 entries total, shared by all
+    # models, dropped on restart. There is no config or env knob to raise that
+    # cap (Cache() takes no max_size_in_memory), so high-volume llama-fim
+    # traffic will keep evicting chat entries. Switch to `type: disk` plus a
+    # mounted disk_cache_dir if the cache should actually hold a working set.
+    cache: true
     cache_params:
-      type: local
+        type: local
+        ttl: 600
 general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
     database_url: os.environ/DATABASE_URL
-    proxy_batch_write_at: 1
     use_x_forwarded_for: true
     mcp_trusted_proxy_ranges:
         - "10.0.0.0/24"
