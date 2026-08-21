@@ -12,7 +12,7 @@ export
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring restart-imagegen logs ps pull config vulkaninfo stats monitoring monitoring-down imagegen imagegen-down test clean
+.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring restart-imagegen logs ps pull config vulkaninfo stats monitoring monitoring-down imagegen imagegen-down darkmode darkmode-up darkmode-down test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -81,6 +81,20 @@ imagegen: ## Add optional Imagegen Mode (ComfyUI, LAN :8188) on top; builds the 
 
 imagegen-down: ## Stop the optional Imagegen Mode (ComfyUI) service
 	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.comfyui.yml" $(COMPOSE) stop comfyui
+
+darkmode: ## Build litellm-dark-mode:local from the pinned litellm base (github.com/delorenj/litellm-dark-mode)
+	@BASE_IMAGE=$$(grep -m1 'image: ghcr.io/berriai/litellm' docker-compose.yml | awk '{print $$2}'); \
+	echo "Pinning digest for $$BASE_IMAGE..."; \
+	$(CONTAINER_BIN) pull -q $$BASE_IMAGE >/dev/null; \
+	DIGEST=$$($(CONTAINER_BIN) inspect --format='{{index .RepoDigests 0}}' $$BASE_IMAGE); \
+	npx --yes litellm-dark-mode docker --image $$DIGEST --tag litellm-dark-mode:local
+
+darkmode-up: darkmode ## Build (if needed) and start the stack with the dark-mode litellm image (docker-compose.darkmode.yml)
+	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.darkmode.yml" $(COMPOSE) up -d
+
+darkmode-down: ## Switch the litellm service back to the pinned upstream image
+	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.darkmode.yml" $(COMPOSE) down litellm
+	$(COMPOSE) up -d --no-deps litellm
 
 test: ## Run the integration test suite against stub Backends
 	tests/run.sh

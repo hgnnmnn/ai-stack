@@ -203,6 +203,21 @@ make monitoring-down   # tear down
 - Prometheus: `127.0.0.1:9090`, scrapes litellm's `/metrics` (request count,
   latency, errors per Model ID/Key).
 
+### Dark mode
+
+Optional, defined in `docker-compose.darkmode.yml` (kept out of the default
+`COMPOSE_FILE`). Patches the litellm dashboard's static export for dark mode
+via [delorenj/litellm-dark-mode](https://github.com/delorenj/litellm-dark-mode)
+and builds a local `litellm-dark-mode:local` image from the pinned base:
+
+```sh
+make darkmode-up       # build litellm-dark-mode:local and start with it
+make darkmode-down     # switch back to the pinned upstream image
+```
+
+`make darkmode` alone just (re)builds the image. Rerun it after bumping the
+litellm base image in `docker-compose.yml`.
+
 ### Issuing Keys
 
 ```sh

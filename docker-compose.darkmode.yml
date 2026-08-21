@@ -1,0 +1,15 @@
+# Dark-mode overlay — swaps the litellm image for a locally built dark-mode
+# patch of the pinned base image (github.com/delorenj/litellm-dark-mode).
+#
+# Kept out of the default COMPOSE_FILE (like the monitoring/imagegen
+# overlays), so it only applies when explicitly layered on:
+#
+#   make darkmode      # build litellm-dark-mode:local from the pinned base
+#   make darkmode-up   # build (if needed) and bring the stack up with it
+#
+# The pinned tag in docker-compose.yml stays the Renovate-tracked source of
+# truth; this overlay only swaps which image the `litellm` service runs.
+
+services:
+    litellm:
+        image: litellm-dark-mode:local
