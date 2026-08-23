@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-GATEWAY="http://localhost:4000"
+GATEWAY="http://localhost:${GATEWAY_PORT:-4000}"
 
 @test "chat completion with Model ID llama-chat routes to the chat backend" {
   run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
@@ -75,11 +75,42 @@ spend_log_count() {
   done
   [ "$after" -gt "$before" ]
 
+  # Reuse run.sh's exact invocation rather than restating it: the project name
+  # and the compose file set both matter, and a partial restatement silently
+  # targets the wrong project or an incomplete project.
   cd "$BATS_TEST_DIRNAME/.."
-  local_compose="docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file tests/test.env"
-  $local_compose down
-  $local_compose up -d --wait
+  $COMPOSE down
+  $COMPOSE up -d --wait
 
   persisted=$(spend_log_count)
   [ "$persisted" -ge "$after" ]
+}
+
+# The response cache is Redis-backed (litellm/config.yaml cache_params). The
+# stub mints a fresh id per call, so an identical second request coming back
+# with the same id means it was served out of Redis, not from the Backend.
+@test "identical requests are served from the Redis response cache" {
+  body='{"model": "llama-chat", "messages": [{"role": "user", "content": "redis cache probe"}]}'
+
+  run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+    -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$body"
+  [ "$status" -eq 0 ]
+  first=$(echo "$output" | jq -r '.id')
+  [ -n "$first" ]
+  [ "$first" != "null" ]
+
+  # LiteLLM writes the cache entry on a background task, so the hit isn't
+  # guaranteed on the very next request.
+  second=""
+  for _ in $(seq 1 10); do
+    second=$(curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+      -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+      -H "Content-Type: application/json" \
+      -d "$body" | jq -r '.id')
+    [ "$second" = "$first" ] && break
+    sleep 1
+  done
+  [ "$second" = "$first" ]
 }

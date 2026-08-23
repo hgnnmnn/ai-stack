@@ -4,7 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.monitoring.yml -f docker-compose.test.yml --env-file tests/test.env"
+# -p keeps this off the default `ai-stack` project: the `down -v` below would
+# otherwise delete the running prod stack's Postgres/Redis/Grafana volumes.
+export COMPOSE
+COMPOSE="docker compose -p ai-stack-test -f docker-compose.yml -f docker-compose.monitoring.yml -f docker-compose.test.yml --env-file tests/test.env"
 
 cleanup() {
   $COMPOSE down -v

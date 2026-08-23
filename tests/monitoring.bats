@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
-GATEWAY="http://localhost:4000"
-PROMETHEUS="http://localhost:9090"
-GRAFANA="http://localhost:3000"
+GATEWAY="http://localhost:${GATEWAY_PORT:-4000}"
+PROMETHEUS="http://localhost:${PROMETHEUS_PORT:-9090}"
+GRAFANA="http://localhost:${GRAFANA_PORT:-3000}"
 GRAFANA_AUTH="admin:$GRAFANA_ADMIN_PASSWORD"
 DS_UID="prometheus"
 

@@ -9,11 +9,16 @@ services:
             DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
             STORE_MODEL_IN_DB: True
             AUTO_REDIRECT_UI_LOGIN_TO_SSO: true
+            REDIS_HOST: redis
+            REDIS_PORT: "6379"
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
         volumes:
             - ./litellm/config.yaml:/app/config.yaml:ro,Z
         command: ["--config", "/app/config.yaml"]
         depends_on:
             postgres:
+                condition: service_healthy
+            redis:
                 condition: service_healthy
         healthcheck:
             test:
@@ -27,6 +32,44 @@ services:
             timeout: 5s
             retries: 5
             start_period: 30s
+
+    # Shared state for the Gateway: response cache, rate-limit and budget
+    # counters, router cooldowns, config propagation. LiteLLM warns without it
+    # (LITELLM_DISABLE_NO_REDIS_WARNING) because every one of those is
+    # per-worker otherwise. Nothing here is the system of record -- Keys and
+    # spend live in Postgres -- so this is a cache that happens to persist,
+    # not a database:
+    #   - maxmemory/allkeys-lru caps growth; cache entries carry a ttl anyway.
+    #   - stop-writes-on-bgsave-error no: a failed snapshot degrades to "cache
+    #     not persisted" instead of Redis refusing writes and taking the
+    #     Gateway's rate limiting down with it.
+    # Password passed through the shell rather than inline so it doesn't land
+    # in `make config` output. Internal only, no published port.
+    redis:
+        image: redis:8.10.1-alpine
+        restart: unless-stopped
+        environment:
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+        command:
+            - sh
+            - -c
+            - >-
+              exec redis-server
+              --requirepass "$$REDIS_PASSWORD"
+              --maxmemory 512mb
+              --maxmemory-policy allkeys-lru
+              --stop-writes-on-bgsave-error no
+        volumes:
+            - redis-data:/data
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
     postgres:
         image: postgres:18-alpine
@@ -49,3 +92,4 @@ services:
 
 volumes:
     postgres-data:
+    redis-data:

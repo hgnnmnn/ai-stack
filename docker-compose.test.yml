@@ -1,7 +1,10 @@
 # Stand-ins for the real llama.cpp Backends (issues #2/#3), used to test the
 # litellm Gateway's routing, Key scoping, and usage logging without a GPU.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+#   docker compose -p ai-stack-test -f docker-compose.yml -f docker-compose.test.yml up -d --build
+#
+# Published ports are remapped off the real stack's (4000/9090/3000) and bound
+# to localhost, so this can run alongside a live Gateway. See tests/test.env.
 
 services:
     llama-chat:
@@ -43,6 +46,8 @@ services:
             retries: 5
 
     litellm:
+        ports: !override
+            - "127.0.0.1:${GATEWAY_PORT}:4000"
         depends_on:
             llama-chat:
                 condition: service_healthy
@@ -50,3 +55,13 @@ services:
                 condition: service_healthy
             postgres:
                 condition: service_healthy
+            redis:
+                condition: service_healthy
+
+    prometheus:
+        ports: !override
+            - "127.0.0.1:${PROMETHEUS_PORT}:9090"
+
+    grafana:
+        ports: !override
+            - "127.0.0.1:${GRAFANA_PORT}:3000"

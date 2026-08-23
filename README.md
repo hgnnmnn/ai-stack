@@ -36,6 +36,7 @@ graph TD
     subgraph "Host (Docker Compose)"
         GW["Gateway: LiteLLM\nport 4000"]
         PG["(Postgres 18)"]
+        RD["(Redis)"]
         L1["llama-chat\nport 8001"]
         L2["llama-coder\nport 8002"]
         L3["llama-fim\nport 8004"]
@@ -54,19 +55,29 @@ graph TD
     GW --> L2
     GW --> L3
     GW -.-> PG
+    GW -.-> RD
     GW --> PM
     PM --> GF
 ```
 
 Gateway is LAN-facing on `:4000` (reverse proxy terminates TLS, forwards
-`/v1/*`). Postgres (Keys/spend) is internal only. Everything else —
-Backends, ComfyUI, Prometheus — binds `127.0.0.1` only.
+`/v1/*`). Postgres (Keys/spend) and Redis (response cache, rate-limit and
+budget counters, router state) are internal only, with no published port at
+all. Everything else — Backends, ComfyUI, Prometheus — binds `127.0.0.1` only.
+
+Postgres is the system of record; Redis is not. Losing the Redis volume costs
+a cold response cache and reset rate-limit counters, nothing durable. LiteLLM
+has warned since v1.98.0 when it runs without Redis, because every one of
+those is otherwise per-worker — see
+[Redis requirements](https://docs.litellm.ai/docs/proxy/redis_requirements)
+and [ADR 0007](docs/adr/0007-redis-for-gateway-shared-state.md).
 
 ### Setup
 
 1. `make env` (copies `.env.example` to `.env`) and fill in:
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
-   - `POSTGRES_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`: strong random values
+   - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`: strong
+     random values (`openssl rand -hex 32`)
    - `MODELS_DIR`, `CHAT_MODEL_FILE`, `CODER_MODEL_FILE`, `FIM_MODEL_FILE`,
      `RENDER_GID`, `VIDEO_GID`: see [Backends](#backends)
 2. `make up`
@@ -163,7 +174,7 @@ per machine, not per container.
 2. `docker compose up -d llama-chat`, test `http://127.0.0.1:8001/v1/chat/completions`.
 3. `docker compose up -d llama-coder`, test `http://127.0.0.1:8002/v1/chat/completions`.
 4. `docker compose up -d llama-fim`, test `http://127.0.0.1:8004/v1/completions` (raw FIM prompt).
-5. `docker compose up -d` for the rest (litellm, postgres). Monitoring
+5. `docker compose up -d` for the rest (litellm, postgres, redis). Monitoring
    is layered on separately, see [Monitoring](#monitoring).
 
 #### Imagegen Mode (ComfyUI)
@@ -242,8 +253,14 @@ with `POST /key/delete`, inspect with `GET /key/info?key=...`.
 make test
 ```
 
-Brings up litellm + Postgres + Prometheus + Grafana alongside stub Backends
-(`docker-compose.test.yml`) and runs `tests/*.bats` against them.
+Brings up litellm + Postgres + Redis + Prometheus + Grafana alongside stub
+Backends (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
+Requires [bats](https://github.com/bats-core/bats-core) on `PATH`.
+
+The suite runs in its own compose project (`-p ai-stack-test`) on remapped
+localhost ports (4100/9190/3100), so it is safe to run while the real stack
+is up — its teardown is `down -v`, which under the default project name would
+delete the live Postgres/Redis/Grafana volumes.
 
 ## Acknowledgements
 

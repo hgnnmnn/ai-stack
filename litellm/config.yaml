@@ -69,17 +69,30 @@ litellm_settings:
     # embeddings, rerank, responses) instead of a list that goes stale when a
     # Backend is added.
     #
-    # Two consequences worth knowing. An identical request replays the stored
-    # answer for the whole ttl, so "regenerate" in a Client returns the same
-    # text even at --temp 1.0. And `type: local` is an in-process LRU that
-    # LiteLLM builds with its own defaults: 200 entries total, shared by all
-    # models, dropped on restart. There is no config or env knob to raise that
-    # cap (Cache() takes no max_size_in_memory), so high-volume llama-fim
-    # traffic will keep evicting chat entries. Switch to `type: disk` plus a
-    # mounted disk_cache_dir if the cache should actually hold a working set.
+    # Backed by the `redis` service in docker-compose.yml, which exists for the
+    # Gateway's rate-limit/budget/router state (ADR 0007), not for this. Read
+    # that ADR before treating a bigger cache as a win: f104cfd removed a
+    # Valkey-backed cache from this stack precisely because exact-match caching
+    # gets near-zero hit rates on multi-turn chat -- every request carries the
+    # full history, so every request is unique. Redis does not change that.
+    #
+    # This moved off `type: local` only because that was an in-process LRU
+    # hardcoded to 200 entries shared by every Model ID (Cache() takes no
+    # max_size_in_memory, no env knob), so it wasn't doing much either, and
+    # pointing at an already-running Redis costs nothing. llama-fim's raw
+    # completions are the workload where it might actually pay off. If the
+    # Prometheus litellm_*cache* series still shows ~0 hits, set cache: false
+    # rather than trying a third backend.
+    #
+    # Unchanged consequence worth knowing: an identical request replays the
+    # stored answer for the whole ttl, so "regenerate" in a Client returns the
+    # same text even at --temp 1.0. It now also does so across restarts.
     cache: true
     cache_params:
-        type: local
+        type: redis
+        host: os.environ/REDIS_HOST
+        port: os.environ/REDIS_PORT
+        password: os.environ/REDIS_PASSWORD
         ttl: 600
 general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
@@ -87,3 +100,13 @@ general_settings:
     use_x_forwarded_for: true
     mcp_trusted_proxy_ranges:
         - "10.0.0.0/24"
+
+# Router state shared through the same Redis: deployment cooldowns, usage- and
+# latency-based routing counters, rate-limit and budget accounting. Separate
+# from cache_params above -- LiteLLM does not derive one from the other, and
+# leaving this out is what keeps the "No Redis configured" banner up even with
+# the cache pointed at Redis.
+router_settings:
+    redis_host: os.environ/REDIS_HOST
+    redis_port: os.environ/REDIS_PORT
+    redis_password: os.environ/REDIS_PASSWORD
