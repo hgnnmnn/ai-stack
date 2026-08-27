@@ -126,8 +126,6 @@ services:
             - "0.0"
             - --presence-penalty
             - "0.0"
-            - --repeat-penalty
-            - "1.0"
             - --reasoning-preserve
             - --chat-template-kwargs
             - '{"reasoning_effort": "medium"}'
