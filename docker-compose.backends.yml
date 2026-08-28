@@ -74,6 +74,77 @@ services:
             retries: 10
             start_period: 300s
 
+    llama-chat-rocm:
+        # ROCm A/B trial per ADR 0003 ("Update 2026-07"/"2026-08"): decision
+        # (Vulkan/RADV) stands as of the last trial (idle iGPU power ~40W on
+        # ROCm/HIP vs ~13W on Vulkan, no generation-speed upside), but ROCm
+        # prefill was ~2.4x faster at deep context (~130k tokens) in
+        # community benchmarks. Before re-enabling, re-check llama.cpp
+        # release notes / the amd-strix-halo-toolboxes benchmarks for gfx1151
+        # to see whether that tradeoff has moved. Runs on a separate port
+        # alongside llama-chat for side-by-side measurement, not as a
+        # replacement — needs /dev/kfd in addition to /dev/dri.
+        image: ghcr.io/ggml-org/llama.cpp:server-rocm-b10666
+        restart: unless-stopped
+        ulimits:
+            memlock: -1
+        ports:
+            - "127.0.0.1:8011:8011"
+        devices:
+            - /dev/dri:/dev/dri
+            - /dev/kfd:/dev/kfd
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        volumes:
+            - ${MODELS_DIR}:/models:ro,z
+        command:
+            - -m
+            - /models/${CHAT_MODEL_FILE}
+            - --port
+            - "8011"
+            - --ctx-size
+            - "524288"
+            - --parallel
+            - "4"
+            - --flash-attn
+            - "on"
+            - --n-gpu-layers
+            - "999"
+            - --load-mode
+            - mlock
+            - --jinja
+            - --reasoning-format
+            - auto
+            - --spec-type
+            - draft-mtp
+            - --spec-draft-n-max
+            - "3"
+            - --temp
+            - "1.0"
+            - --top-p
+            - "0.95"
+            - --top-k
+            - "0"
+            - --min-p
+            - "0.0"
+            - --repeat-penalty
+            - "1.0"
+            - --presence-penalty
+            - "1.5"
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
+            - --reasoning-preserve
+            - --cont-batching
+            - --metrics
+        healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8011/health"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
+            start_period: 300s
     llama-coder:
         image: ghcr.io/ggml-org/llama.cpp:server-vulkan-b10666
         restart: unless-stopped

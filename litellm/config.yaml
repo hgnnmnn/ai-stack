@@ -32,6 +32,20 @@ model_list:
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
+    - model_name: llama-chat-rocm
+      litellm_params:
+          model: openai/llama-chat
+          api_base: http://llama-chat-rocm:8011/v1
+          api_key: "not-needed"
+          max_parallel_requests: 4
+          timeout: 1800
+          <<: *local-cost
+      model_info:
+          mode: chat
+          max_input_tokens: 131072
+          supports_reasoning: true
+          supports_function_calling: true
+          supports_parallel_function_calling: true
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder
