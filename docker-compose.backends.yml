@@ -29,6 +29,8 @@ services:
         command:
             - -m
             - /models/${CHAT_MODEL_FILE}
+            - --mmproj
+            - /models/${CHAT_MMPROJ_FILE}
             - --port
             - "8001"
             - --ctx-size
@@ -81,6 +83,8 @@ services:
         command:
             - -m
             - /models/${CODER_MODEL_FILE}
+            - --mmproj
+            - /models/${CODER_MMPROJ_FILE}
             - --port
             - "8002"
             - --ctx-size

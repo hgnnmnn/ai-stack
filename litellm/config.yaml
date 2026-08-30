@@ -15,8 +15,12 @@ x-local-cost: &local-cost
 # are told they may send. Both chat Backends run --jinja, so tool calling and
 # reasoning come from the model's own chat template; verified live against
 # each Backend (single + parallel tool call, reasoning_content present).
-# No supports_vision: both --mmproj lines in docker-compose.backends.yml are
-# commented out, so the Backends are text-only.
+# supports_vision: true on both -- docker-compose.backends.yml passes
+# --mmproj for each, and both current models (Ornith-1.5-35B-A3B,
+# Qwen3.8-27B) ship their own vision projector. llama-chat is MoE/hybrid
+# like the old Qwen3.6-35B-A3B ADR 0002 flagged for q8_0 KV + multimodal
+# risk -- watch for degraded image understanding, not yet empirically
+# ruled out on this model.
 model_list:
     - model_name: llama-chat
       litellm_params:
@@ -32,6 +36,7 @@ model_list:
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
+          supports_vision: true
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder
@@ -46,6 +51,7 @@ model_list:
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
+          supports_vision: true
     - model_name: llama-fim
       litellm_params:
           model: text-completion-openai/llama-fim

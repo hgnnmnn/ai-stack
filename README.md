@@ -98,8 +98,8 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
-| `llama-chat` | 8001 | `Ornith-1.0-35B` ([HF](https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding |
-| `llama-coder` | 8002 | `Qwen3.6-27B` MTP, dense ([HF](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)) | coding, 256k ctx, `--parallel 2` (two ~131k slots), MTP self-speculative decoding (draft n-max 2). Dense, not MoE — deliberate, see ADR 0005 |
+| `llama-chat` | 8001 | `Ornith-1.5-35B-A3B` ([HF](https://huggingface.co/bartowski/Ornith-1.5-35B-A3B-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding, vision (`--mmproj`) |
+| `llama-coder` | 8002 | `Qwen3.8-27B`, dense ([HF](https://huggingface.co/bartowski/Qwen3.8-27B-GGUF)) | coding, 256k ctx, MTP self-speculative decoding (draft n-max 3). Dense, not MoE — deliberate, see ADR 0005; vision (`--mmproj`) |
 | `llama-fim` | 8004 | `FIM_MODEL_FILE`, e.g. `Codestral-22B-v0.1` ([HF](https://huggingface.co/bartowski/Codestral-22B-v0.1-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Suffix-Prefix-Middle FIM order (`--spm-infill`, ADR 0006) — Clients must send `[SUFFIX]{suffix}[PREFIX]{prefix}`, not Qwen's `<\|fim_prefix\|>`/`<\|fim_suffix\|>`/`<\|fim_middle\|>` order |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
@@ -130,11 +130,13 @@ Place GGUF files under `MODELS_DIR` (mounted read-only) and point
 `CHAT_MODEL_FILE`/`CODER_MODEL_FILE`/`FIM_MODEL_FILE` at them. For
 sharded models, point at the first shard (`model-00001-of-000XX.gguf`).
 
-No `--mmproj` flags are wired into `docker-compose.backends.yml` right
-now: `llama-coder` (Qwen3.6) has a vision encoder but is deliberately kept
-text-only, and `llama-chat` (Ornith) has none. `CHAT_MMPROJ_FILE` /
-`CODER_MMPROJ_FILE` remain defined in `.env.example` for a future swap to
-a vision-capable model. `llama-fim` needs no projector.
+Both `llama-chat` and `llama-coder` run with `--mmproj` for image input:
+`Ornith-1.5-35B-A3B` and `Qwen3.8-27B` each ship their own vision
+projector in the same HF repo as the base model, set via
+`CHAT_MMPROJ_FILE`/`CODER_MMPROJ_FILE`. `llama-chat` is an MoE/hybrid
+architecture running q8_0 KV cache — the interaction between quantized KV
+and multimodal inference there is unverified, see ADR 0002. `llama-fim`
+needs no projector.
 
 #### GPU passthrough GIDs
 
