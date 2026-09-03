@@ -1,0 +1,116 @@
+# EXPERIMENTAL — vLLM+ROCm spike (feat/vllm-rocm-spike), not yet an accepted
+# alternative to docker-compose.backends.yml (llama.cpp+Vulkan, ADR 0003).
+#
+# Why ROCm and not Vulkan: vLLM has no official Vulkan backend (only
+# CUDA/ROCm/CPU/XPU). On this iGPU that means ROCm is the only path in.
+#
+# Known risk: AMD Strix Halo (gfx1151) is not on AMD's or vLLM's officially
+# supported GPU list. Community-only support via kyuz0/amd-strix-halo-vllm-toolboxes
+# (prebuilt image, TheRock ROCm wheels). Open upstream bug
+# https://github.com/vllm-project/vllm/issues/32180 — V1 engine hangs during
+# HIP-graph capture on gfx1151 — worked around here with --enforce-eager,
+# which gives up CUDA/HIP-graph fusion and costs throughput.
+#
+# Milestone 1 (this file): base models, no speculative decoding, straight
+# comparison against the llama.cpp+Vulkan Backends. MTP is NOT wired here —
+# vLLM's MTP support is architecture-specific (fixed MTP_MODEL_TYPES list:
+# deepseek_mtp, mimo_mtp, glm4_moe_mtp, ernie_mtp, qwen3_next_mtp,
+# longcat_flash_mtp); neither model here is in it. Reaching MTP parity with
+# the llama.cpp Backends would need a custom vLLM speculator — separate,
+# ergebnisoffener follow-up, not part of this spike.
+#
+# Models: vLLM-compatible quants (compressed-tensors AWQ-INT4 — not the GGUF
+# files used by docker-compose.backends.yml). VLLM_CHAT_MODEL_REPO /
+# VLLM_CODER_MODEL_REPO are HF repo IDs, not local paths — vLLM downloads
+# them itself via huggingface_hub on first start, straight into
+# MODELS_DIR/.hf-cache (bind-mounted, so the download survives container
+# recreation and only happens once). That cache dir needs to be writable,
+# unlike the read-only mount in docker-compose.backends.yml.
+#
+# Both run concurrently: --gpu-memory-utilization 0.40 each (0.80 total,
+# 20% headroom) — on 128 GB unified memory that's ~51 GB/model, matching the
+# Q4-class quants both models use elsewhere in this stack. Note this
+# fraction is of whatever ROCm reports as total device memory, which on a
+# unified-memory APU depends on the BIOS UMA/GART carve-out — verify the
+# actual reported total (vLLM logs it at startup) before trusting the GB
+# math above.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.backends.yml down
+#   docker compose -f docker-compose.yml -f docker-compose.backends-vllm.yml up -d
+
+services:
+    vllm-chat:
+        image: docker.io/kyuz0/vllm-therock-gfx1151:rocm10.0.0-torch2.11.0-vllm0.28.0
+        restart: unless-stopped
+        ipc: host
+        security_opt:
+            - seccomp:unconfined
+        ports:
+            - "127.0.0.1:8001:8001"
+        devices:
+            - /dev/dri:/dev/dri
+            - /dev/kfd:/dev/kfd
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        volumes:
+            - ${MODELS_DIR}:/models:z
+        environment:
+            HF_HOME: /models/.hf-cache
+            HF_TOKEN: ${HF_TOKEN}
+        command:
+            - --model
+            - ${VLLM_CHAT_MODEL_REPO}
+            - --served-model-name
+            - llama-chat
+            - --port
+            - "8001"
+            - --max-model-len
+            - "131072"
+            - --enforce-eager
+            - --gpu-memory-utilization
+            - "0.40"
+        healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
+            start_period: 300s
+
+    vllm-coder:
+        image: docker.io/kyuz0/vllm-therock-gfx1151:rocm10.0.0-torch2.11.0-vllm0.28.0
+        restart: unless-stopped
+        ipc: host
+        security_opt:
+            - seccomp:unconfined
+        ports:
+            - "127.0.0.1:8002:8002"
+        devices:
+            - /dev/dri:/dev/dri
+            - /dev/kfd:/dev/kfd
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        volumes:
+            - ${MODELS_DIR}:/models:z
+        environment:
+            HF_HOME: /models/.hf-cache
+            HF_TOKEN: ${HF_TOKEN}
+        command:
+            - --model
+            - ${VLLM_CODER_MODEL_REPO}
+            - --served-model-name
+            - llama-coder
+            - --port
+            - "8002"
+            - --max-model-len
+            - "131072"
+            - --enforce-eager
+            - --gpu-memory-utilization
+            - "0.40"
+        healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
+            start_period: 300s
