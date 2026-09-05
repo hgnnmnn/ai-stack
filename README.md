@@ -100,7 +100,7 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 |---|---|---|---|
 | `llama-chat` | 8001 | `Ornith-1.5-35B-A3B` ([HF](https://huggingface.co/bartowski/Ornith-1.5-35B-A3B-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding, vision (`--mmproj`) |
 | `llama-coder` | 8002 | `Qwen3.8-27B`, dense ([HF](https://huggingface.co/bartowski/Qwen3.8-27B-GGUF)) | coding, 256k ctx, MTP self-speculative decoding (draft n-max 3). Dense, not MoE — deliberate, see ADR 0005; vision (`--mmproj`) |
-| `llama-fim` | 8004 | `FIM_MODEL_FILE`, e.g. `Codestral-22B-v0.1` ([HF](https://huggingface.co/bartowski/Codestral-22B-v0.1-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Suffix-Prefix-Middle FIM order (`--spm-infill`, ADR 0006) — Clients must send `[SUFFIX]{suffix}[PREFIX]{prefix}`, not Qwen's `<\|fim_prefix\|>`/`<\|fim_suffix\|>`/`<\|fim_middle\|>` order |
+| `llama-fim` | 8004 | `FIM_MODEL_FILE`, e.g. `Qwen2.5-Coder-7B` ([HF](https://huggingface.co/QuantFactory/Qwen2.5-Coder-7B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>`. Codestral-22B (Suffix-Prefix-Middle, `--spm-infill`) is a drop-in higher-quality/higher-latency rollback, see ADR 0006 |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
 underlying model is swapped. Both big Backends use a q8_0-quantized KV

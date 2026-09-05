@@ -163,12 +163,6 @@ services:
             - "1"
             - --cache-reuse
             - "256"
-            # Codestral's FIM format is Suffix-Prefix-Middle ([SUFFIX]...
-            # [PREFIX]...), not the Prefix-Suffix-Middle order llama.cpp
-            # assumes by default (and the previous Qwen2.5-Coder FIM model
-            # used) — required for both /infill and for building raw
-            # /v1/completions prompts by hand.
-            - --spm-infill
             - --temp
             - "0.2"
             - --top-p
@@ -184,9 +178,7 @@ services:
             interval: 15s
             timeout: 10s
             retries: 10
-            # Bumped from 60s: 22B model takes longer to load+mlock than
-            # the previous 1.5B FIM model.
-            start_period: 300s
+            start_period: 90s
 
     litellm:
         depends_on:
