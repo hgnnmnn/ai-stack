@@ -36,7 +36,7 @@ model_list:
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
-          supports_vision: true
+          supports_vision: false
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder

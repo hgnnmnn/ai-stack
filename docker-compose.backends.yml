@@ -105,7 +105,7 @@ services:
             - --spec-draft-n-max
             - "3"
             - --temp
-            - "1.0"
+            - "0.6"
             - --top-p
             - "0.95"
             - --top-k
