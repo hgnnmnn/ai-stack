@@ -27,13 +27,20 @@ to ~2 s, flat regardless of how long the conversation has grown.
 
 **`llama-coder` and `llama-fim` are gone.** halogen serves one model and
 has no infill endpoint, and the memory budget leaves no room for a second
-Backend beside it. Measured on this host at first boot: 123 GiB of host RAM,
-less 67.7 GiB of resident weights and the 20 GiB held back for the n-gram
-page cache, leaves 35.1 GiB for the device. Upstream's default pool of
-524288 positions wants ~35.0 GiB plus 1.5 of margin, does not fit, and the
-engine lowers itself to 262144 (~27.8 GiB) on every boot. The compose file
-sets 262144 outright so it stops claiming a number that gets overridden.
-Upstream recommends a dedicated machine and it is right.
+Backend beside it. What the engine measures on this host once loaded:
+68.0 GiB of weights locked in RAM, 7.2 GiB of KV pool, 21.1 GiB of working
+memory, 96.3 GiB in all, leaving 16.8 GiB for everything else. Upstream
+recommends a dedicated machine and it is right.
+
+The pool is at 262144 rather than upstream's 524288 default because the
+engine refuses the larger one at startup -- "524288 positions need ~35.0 GiB
+(plus 1.5 of margin) and host RAM cannot spare it" -- and lowers itself. Note
+that this guard is an estimate the engine's own measured figures contradict:
+it calls 262144 "~27.8 GiB" while actually reserving 7.2 GiB for it, and the
+pre-flight line puts a 524288 pool at 14.9 GiB. So 524288 may well fit here,
+and the refusal may be a pessimistic guard rather than a real ceiling. Worth
+testing, but 262144 is what runs today and the compose file says so rather
+than naming a number that gets overridden.
 
 So FIM autocomplete has no replacement in this stack. ADR 0008 chose a 7B
 model precisely because autocomplete latency is felt on every keystroke;

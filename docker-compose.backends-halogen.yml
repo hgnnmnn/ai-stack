@@ -62,14 +62,17 @@ services:
             # below is what actually costs memory (about 29.5 KiB per
             # position).
             #
-            # 262144, not upstream's 524288 default: this host cannot fit the
-            # bigger pool and the engine says so on every boot --
-            #   host RAM 123 GiB, less 67.7 resident weights and 20.0 reserved
-            #   = 35.1 GiB for the device; 524288 positions need ~35.0 GiB
-            #   (plus 1.5 of margin) and host RAM cannot spare it.
-            #   LOWERING THE POOL TO 262144 (~27.8 GiB).
+            # 262144, not upstream's 524288 default, because the engine
+            # refuses the larger pool at startup and lowers itself to this.
             # Setting it here changes nothing about what runs; it stops the
             # file from claiming a number the engine overrides.
+            #
+            # The refusal is worth a second look before taking it as a
+            # ceiling: the guard estimates 262144 at "~27.8 GiB", while the
+            # engine then reserves 7.2 GiB for it and reports 16.8 GiB still
+            # free. The pre-flight line puts a 524288 pool at 14.9 GiB. Try
+            # 524288 again if two full-context conversations are ever worth
+            # it -- it buys resident conversations, not speed.
             HALOGEN_CTX: "262144"
             HALOGEN_KV_POOL_POSITIONS: "262144"
             HALOGEN_KV_SLOTS: "4"

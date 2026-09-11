@@ -120,13 +120,16 @@ taken, token budget aliases and defaults, tool-call wire format.
 halogen wants the machine to itself. What it reports at boot on this host:
 
 ```
-kv pool: host RAM 123 GiB, less 67.7 resident weights and 20.0 reserved for
-         the n-gram page cache and the OS = 35.1 GiB for the device
+memory: 68.0 GiB of weights locked in RAM, 7.2 GiB of KV pool,
+        21.1 GiB of working memory, 96.3 GiB in all
+host memory left for everything else: 16.8 GiB total
 ```
 
-Upstream's default pool of 524288 positions needs ~35.0 GiB plus margin and
-does not fit, so `HALOGEN_KV_POOL_POSITIONS` is set to `262144` (~27.8 GiB) —
-the value the engine lowers itself to anyway. Imagegen Mode still layers
+`HALOGEN_KV_POOL_POSITIONS` is at `262144` because the engine refuses
+upstream's `524288` default at startup and lowers itself to this anyway. Be
+aware that the guard doing the refusing is an estimate its own measured
+figures contradict — it calls 262144 "~27.8 GiB" while reserving 7.2 GiB —
+so the larger pool may actually fit. Untested here. Imagegen Mode still layers
 ComfyUI's diffusion weights on top (see
 [Imagegen Mode](#imagegen-mode-comfyui)) — expect to stop the Backend rather
 than shrink it.
