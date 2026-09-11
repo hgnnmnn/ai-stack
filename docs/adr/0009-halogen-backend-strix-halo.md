@@ -114,6 +114,37 @@ Every line the engine logs is prefixed `mtp`, so the drafter is on. Its
 depth-1 drafter would cap at, and moves inversely to throughput across these
 shapes. Upstream names it once without defining it. Left uninterpreted.
 
+Concurrency, measured the same way: 250 tokens of prose per stream, greedy,
+all streams launched together, straight at the Backend.
+
+| streams | per stream | total | wall clock |
+|---|---|---|---|
+| 1 | 32.0 tok/s | 32 tok/s | 8.7 s |
+| 2 | 21.3, 22.7 | 44 tok/s | 12.7 s |
+| 4 | 14.6 to 16.8 | 62 tok/s | 18.4 s |
+| 6 | four ran, two queued | 54 tok/s | 27.8 s |
+
+Four is the ceiling, and two limits happen to land on the same number:
+`HALOGEN_KV_SLOTS` in the compose file, and `max_parallel_requests` in
+`litellm/config.yaml`, which queues at the Gateway so nothing piles up inside
+the engine. A fifth request waits, it does not fail — at six streams the last
+two started about 15 s in, as slots came free. Raising the slot count is a
+latency policy rather than a throughput one: upstream measures the total
+flattening past eight.
+
+The pool is the other limit, and it only bites on long contexts. A request
+reserves prompt + `max_tokens` positions on admission, so the running set has
+to fit 262144. Four requests at the 65536 budget cap were admitted at once
+with `queued` never leaving 0 — that is the pool filled exactly. By the same
+arithmetic (not measured) two 131k conversations fit, or one at the full
+262144.
+
+The per-stream column is the number to weigh, not the total: speculation is
+off the moment a second stream is generating, which is why one stream is
+faster for a single user than four are each. Upstream's own table reads 41.3,
+55.2, 74.8 for one, two and four — higher throughout because it measures a
+faster prompt shape than the prose used here; the shape of the curve matches.
+
 ## Rolling back
 
 `docker-compose.backends.yml` is untouched, so the llama.cpp stack is a
