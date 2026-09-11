@@ -1,0 +1,95 @@
+# halogen-flash-server replaces llama.cpp, and three Backends become one
+
+The stack drops llama.cpp entirely and runs
+`ghcr.io/peonist-ai/halogen-flash-server:0.5.6` serving
+`peonist-ai/halogen-qwen3.8-flash-next`. This is not a model swap in the
+sense of ADR 0005 or ADR 0008 — the inference engine, the weight format,
+the GPU API, and the number of Backends all change together, because the
+engine only exists for one model and the model only loads in that engine.
+
+## Why
+
+halogen is written for exactly this machine: gfx1151, and nothing else —
+the image hard-rejects any other architecture. Upstream measures ~1,424
+tok/s prefill at 32k and 41.7 tok/s speculative decode on a single stream,
+against 34.1 tok/s serial. ADR 0003 chose Vulkan/RADV over ROCm because
+ROCm on this iGPU was the slower and more fragile path; halogen is ROCm
+(it needs `/dev/kfd` on top of `/dev/dri`), but the comparison ADR 0003
+made was between general-purpose runtimes. This is a kernel set written
+for one GPU and one model, so that ADR's reasoning doesn't transfer, and
+its conclusion is simply not in play here.
+
+The prompt cache is the part that changes daily use more than the decode
+rate does: a follow-up turn on a 100k-token conversation goes from ~88 s
+to ~2 s, flat regardless of how long the conversation has grown.
+
+## What this costs
+
+**`llama-coder` and `llama-fim` are gone.** halogen serves one model and
+has no infill endpoint, and the memory budget leaves no room for a second
+Backend beside it. Measured on this host at first boot: 123 GiB of host RAM,
+less 67.7 GiB of resident weights and the 20 GiB held back for the n-gram
+page cache, leaves 35.1 GiB for the device. Upstream's default pool of
+524288 positions wants ~35.0 GiB plus 1.5 of margin, does not fit, and the
+engine lowers itself to 262144 (~27.8 GiB) on every boot. The compose file
+sets 262144 outright so it stops claiming a number that gets overridden.
+Upstream recommends a dedicated machine and it is right.
+
+So FIM autocomplete has no replacement in this stack. ADR 0008 chose a 7B
+model precisely because autocomplete latency is felt on every keystroke;
+a 41 tok/s reasoning model cannot stand in for it. Clients configured
+against `llama-fim` will get a 400. This was an accepted trade, not an
+oversight — if autocomplete turns out to matter more than the chat gain,
+the rollback below restores it.
+
+**`llama-chat` keeps its name.** Nothing behind it is llama.cpp anymore,
+let alone Llama, which makes the Model ID a double misnomer. It stays
+anyway: CONTEXT.md makes the Model ID the public contract, and renaming it
+would break OpenWebUI and every Key issued to a friend for a swap that is
+still on trial. `HALOGEN_MODEL_ID` is set to `llama-chat` so the Backend
+reports the same id at `/v1/models` and in every response.
+
+**The response cache is now dead weight.** `llama-fim`'s raw completions
+were the one workload where exact-match caching might have paid off (see
+the note in `litellm/config.yaml`, and f104cfd before it). With them gone,
+expect the Prometheus `litellm_*cache*` series to sit at zero. That is an
+argument for `cache: false`, not for a different cache backend.
+
+**The engine is proprietary.** `LicenseRef-Peonist-EULA`: free to run,
+commercially and over a network, redistributable only unmodified. The
+weights themselves are Apache-2.0. There is no source to audit, and the
+container gets `/dev/kfd`, `ipc: host`, `seccomp=unconfined` and unlimited
+memlock. `HALOGEN_DOWNLOAD` is deliberately left unset so the container
+makes no outbound connections at all; `make halogen-fetch` pulls the
+weights instead.
+
+## Consequences worth knowing
+
+`max_input_tokens` in `litellm/config.yaml` is the full 262144, not a
+slice of it. Unlike llama.cpp's `--ctx-size / --parallel` split, halogen's
+KV positions come from one shared pool, so a single request may use the
+whole native context; the pool, not the slot count, is the memory knob.
+
+`free(1)` and `MemAvailable` will under-report by roughly the size of the
+model: the kernel counts the locked weights as reclaimable file cache and
+they are not reclaimable. `make stats` inherits that lie. The startup log
+line "host memory left for everything else" is the authoritative one.
+
+Vision exists but is off (`HALOGEN_VISION_TOWER`), so `supports_vision` is
+false. Turning it on costs ~11.8 s of prefill for a 1920x1080 image, which
+is a different proposition from `llama-coder`'s projector.
+
+The `supports_*` flags are verified against `/health` (`make
+halogen-health`), which is authoritative for the running build:
+`parallel_tool_calls` true over a `qwen-xml` wire format, and
+`reasoning_content` present on a real completion through the Gateway. A
+first end-to-end request returned 189 tokens in 5.9 s including prefill and
+reasoning, so roughly 32 tok/s against upstream's 41.7 figure for an
+uninterrupted speculative stream — the same order, measured differently.
+
+## Rolling back
+
+`docker-compose.backends.yml` is untouched, so the llama.cpp stack is a
+`git checkout main` away, and the three GGUF files are still in
+`MODELS_DIR`. The only thing that does not come back on its own is disk:
+`HALOGEN_MODELS_DIR` holds ~127 GB.

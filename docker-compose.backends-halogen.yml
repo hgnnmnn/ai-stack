@@ -1,0 +1,121 @@
+# Halogen Flash Server Backend (ADR 0009) — replaces all three llama.cpp
+# Backends in docker-compose.backends.yml. Use it *instead of* that file, not
+# alongside it: halogen pins ~68 GiB of weights and reserves a KV pool on top,
+# so there is no room left for a second Backend on this machine.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.backends-halogen.yml up -d
+#
+# or, in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.backends-halogen.yml
+#
+# Host-specific (devices, group_add GIDs, model path) for the same reason
+# docker-compose.backends.yml is: docker-compose.yml stays portable and is what
+# docker-compose.test.yml overlays with stub Backends for ./tests/run.sh.
+#
+# ADR 0003 (Vulkan/RADV) does not apply here. This image is built against the
+# ROCm SDK and hard-rejects any architecture that is not gfx1151, so it needs
+# /dev/kfd in addition to /dev/dri.
+
+services:
+    halogen:
+        image: ghcr.io/peonist-ai/halogen-flash-server:0.5.6
+        restart: unless-stopped
+        ulimits:
+            memlock: -1
+        # Both of these come from upstream's documented run command. The engine
+        # keeps its weights in locked memory and reaches the GPU through shared
+        # memory; it does not start under the default seccomp profile.
+        security_opt:
+            - seccomp=unconfined
+        ipc: host
+        ports:
+            # Localhost-only, like every other Backend (CONTEXT.md): the
+            # Gateway reaches it as http://halogen:8731 over the compose
+            # network, nothing else does.
+            #
+            # Port 8730 is the engine's own protocol and has NO authentication.
+            # It is deliberately not published, and HALOGEN_BIND is left at its
+            # 127.0.0.1 default so it never leaves the container. Only the
+            # OpenAI-compatible API on 8731 is reachable.
+            - "127.0.0.1:8731:8731"
+        devices:
+            - /dev/kfd:/dev/kfd
+            - /dev/dri:/dev/dri
+        group_add:
+            - "${RENDER_GID}"
+            - "${VIDEO_GID}"
+        volumes:
+            # Writable, unlike MODELS_DIR, because `make halogen-fetch` writes
+            # the checkpoint here. Kept out of MODELS_DIR on purpose: these are
+            # .hgn files that only this engine can read, not GGUF.
+            - ${HALOGEN_MODELS_DIR}:/models:z
+        environment:
+            # The Model ID the Gateway routes to. Keeping it `llama-chat` is
+            # what lets existing Clients and Keys survive this swap (CONTEXT.md:
+            # the Model ID is the public contract and stays constant when the
+            # underlying model changes). Left at its default the server would
+            # answer as `halogen-qwen3.8-flash-next` instead.
+            HALOGEN_MODEL_ID: llama-chat
+
+            # Native context. HALOGEN_CTX bounds a single request; the pool
+            # below is what actually costs memory (about 29.5 KiB per
+            # position).
+            #
+            # 262144, not upstream's 524288 default: this host cannot fit the
+            # bigger pool and the engine says so on every boot --
+            #   host RAM 123 GiB, less 67.7 resident weights and 20.0 reserved
+            #   = 35.1 GiB for the device; 524288 positions need ~35.0 GiB
+            #   (plus 1.5 of margin) and host RAM cannot spare it.
+            #   LOWERING THE POOL TO 262144 (~27.8 GiB).
+            # Setting it here changes nothing about what runs; it stops the
+            # file from claiming a number the engine overrides.
+            HALOGEN_CTX: "262144"
+            HALOGEN_KV_POOL_POSITIONS: "262144"
+            HALOGEN_KV_SLOTS: "4"
+            HALOGEN_MAX_TOK: "32768"
+
+            # Prompt cache mode 2 (upstream default): end-of-request
+            # checkpoints, which is what turns a follow-up turn on a 100k
+            # conversation from ~88 s into ~2 s. The trade-off is that repeat
+            # answers are only usually byte-identical, not always — mode 1 if
+            # that ever matters more than latency.
+            HALOGEN_PROMPT_CACHE: "2"
+
+            # RAM held back for the file cache. The engine's weight lookup
+            # thrashes without it and long prompts crawl.
+            HALOGEN_HOST_RESERVE_GIB: "20"
+
+            # Vision is off until a tower is pointed at. Uncomment to turn the
+            # sidecar on, and flip supports_vision in litellm/config.yaml with
+            # it — prefill costs ~11.8 s for a 1920x1080 image.
+            # HALOGEN_VISION_TOWER: "1"
+
+            # HALOGEN_DOWNLOAD is deliberately unset: with no download the
+            # container makes no outbound connections at all. `make
+            # halogen-fetch` pulls the weights instead.
+        healthcheck:
+            # The image is Python 3.12-based and ships no curl, so this is the
+            # same urllib probe the litellm service uses.
+            test:
+                [
+                    "CMD",
+                    "python3",
+                    "-c",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8731/health')",
+                ]
+            interval: 15s
+            timeout: 10s
+            retries: 20
+            # 118 GiB has to come off disk into locked memory before the API
+            # answers. Cold page cache is the slow case, not the warm restart.
+            start_period: 900s
+
+    litellm:
+        depends_on:
+            halogen:
+                condition: service_healthy
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy

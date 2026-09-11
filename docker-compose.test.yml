@@ -1,5 +1,7 @@
-# Stand-ins for the real llama.cpp Backends (issues #2/#3), used to test the
-# litellm Gateway's routing, Key scoping, and usage logging without a GPU.
+# Stand-in for the real halogen Backend (ADR 0009), used to test the litellm
+# Gateway's routing, Key scoping, and usage logging without a GPU. One stub,
+# because halogen serves exactly one model -- see ADR 0009 for why llama-coder
+# and llama-fim are gone.
 #
 #   docker compose -p ai-stack-test -f docker-compose.yml -f docker-compose.test.yml up -d --build
 #
@@ -7,39 +9,23 @@
 # to localhost, so this can run alongside a live Gateway. See tests/test.env.
 
 services:
-    llama-chat:
-        image: ai-stack-llama-chat-stub
+    halogen:
+        image: ai-stack-halogen-stub
         build: ./tests/stubs
         command: ["python", "/server.py"]
         environment:
+            # The Model ID, not the service name: the real Backend is told the
+            # same thing via HALOGEN_MODEL_ID in
+            # docker-compose.backends-halogen.yml.
             STUB_MODEL_ID: llama-chat
-            STUB_PORT: "8001"
+            STUB_PORT: "8731"
         healthcheck:
             test:
                 [
                     "CMD",
                     "python",
                     "-c",
-                    "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')",
-                ]
-            interval: 5s
-            timeout: 5s
-            retries: 5
-
-    llama-coder:
-        image: ai-stack-llama-coder-stub
-        build: ./tests/stubs
-        command: ["python", "/server.py"]
-        environment:
-            STUB_MODEL_ID: llama-coder
-            STUB_PORT: "8002"
-        healthcheck:
-            test:
-                [
-                    "CMD",
-                    "python",
-                    "-c",
-                    "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8731/health')",
                 ]
             interval: 5s
             timeout: 5s
@@ -49,9 +35,7 @@ services:
         ports: !override
             - "127.0.0.1:${GATEWAY_PORT}:4000"
         depends_on:
-            llama-chat:
-                condition: service_healthy
-            llama-coder:
+            halogen:
                 condition: service_healthy
             postgres:
                 condition: service_healthy

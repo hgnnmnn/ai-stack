@@ -13,7 +13,7 @@ The LiteLLM proxy. Routes client requests to the correct Backend by Model ID, is
 _Avoid_: API Gateway, Proxy (ambiguous with Reverse Proxy)
 
 **Model ID**:
-The identifier clients pass in the `model` field of API requests, exposed by the Gateway. A stable functional alias (`llama-chat`, `llama-coder`) that stays constant when the underlying model is swapped, so Clients and Keys don't need updating. It happens to coincide with the Backend's compose service name, but the two are conceptually distinct: the service name is internal plumbing, the Model ID is the public contract.
+The identifier clients pass in the `model` field of API requests, exposed by the Gateway. A stable functional alias (`llama-chat`) that stays constant when the underlying model is swapped, so Clients and Keys don't need updating — it survived ADR 0009 swapping both the model *and* the inference engine underneath it, which is also why the `llama-` prefix no longer describes anything real. It happens to coincide with the Backend's compose service name, but the two are conceptually distinct: the service name is internal plumbing, the Model ID is the public contract.
 _Avoid_: model name (the real upstream model, e.g. `Ornith-1.0-35B`, is the "underlying model", not the Model ID)
 
 **Reverse Proxy**:

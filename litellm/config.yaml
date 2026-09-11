@@ -1,48 +1,40 @@
-# Nominal per-token pricing shared by all three local Backends. The models
-# cost nothing to run; the numbers exist so spend tracking and the Grafana
-# panels have non-zero values to aggregate.
+# Nominal per-token pricing for the local Backend. The model costs nothing
+# to run; the numbers exist so spend tracking and the Grafana panels have
+# non-zero values to aggregate.
 x-local-cost: &local-cost
     input_cost_per_token: 0.00000002
     output_cost_per_token: 0.00000002
 
-# max_input_tokens is the per-slot context, i.e. --ctx-size / --parallel from
-# docker-compose.backends.yml, NOT --ctx-size itself: a single request only
-# ever sees one slot. Verified against each Backend's /props (n_ctx).
-# max_parallel_requests mirrors --parallel so requests queue at the Gateway
-# instead of piling up inside llama.cpp.
+# max_input_tokens is HALOGEN_CTX from docker-compose.backends-halogen.yml,
+# not a per-slot slice of it: unlike llama.cpp's --ctx-size / --parallel split,
+# halogen's KV positions come out of one shared pool, so a single request may
+# use the full native context. max_parallel_requests mirrors HALOGEN_KV_SLOTS
+# so requests queue at the Gateway instead of piling up inside the engine.
+#
+# One Model ID, one Backend: halogen serves exactly one model and has no
+# infill endpoint, so llama-coder and llama-fim are gone with the llama.cpp
+# Backends (ADR 0009). The Model ID stays `llama-chat` deliberately -- it is
+# the public contract (CONTEXT.md) and Clients and Keys scoped to it keep
+# working across the swap, even though nothing behind it is llama.cpp anymore.
 #
 # The supports_* flags drive the Model Hub "Features" column and what Clients
-# are told they may send. Both chat Backends run --jinja, so tool calling and
-# reasoning come from the model's own chat template; verified live against
-# each Backend (single + parallel tool call, reasoning_content present).
-# supports_vision: true on both -- docker-compose.backends.yml passes
-# --mmproj for each, and both current models (Ornith-1.5-35B-A3B,
-# Qwen3.8-27B) ship their own vision projector. llama-chat is MoE/hybrid
-# like the old Qwen3.6-35B-A3B ADR 0002 flagged for q8_0 KV + multimodal
-# risk -- watch for degraded image understanding, not yet empirically
-# ruled out on this model.
+# are told they may send. Verified live against the Backend's /health
+# (`make halogen-health`), which is authoritative for the running build:
+# parallel_tool_calls true, tool_choice auto/none/required/named over a
+# qwen-xml wire format, and reasoning_content confirmed present on a real
+# completion through the Gateway. supports_vision stays false because
+# HALOGEN_VISION_TOWER is commented out -- /health reports the tower missing
+# as the reason -- so turning it on is a compose change plus a flip here.
+#
+# Worth knowing, since drop_params is on and these go silently: n > 1,
+# top_logprobs, and logprobs with stream=true are refused with a 400.
 model_list:
     - model_name: llama-chat
       litellm_params:
           model: openai/llama-chat
-          api_base: http://llama-chat:8001/v1
+          api_base: http://halogen:8731/v1
           api_key: "not-needed"
           max_parallel_requests: 4
-          timeout: 1800
-          <<: *local-cost
-      model_info:
-          mode: chat
-          max_input_tokens: 131072
-          supports_reasoning: true
-          supports_function_calling: true
-          supports_parallel_function_calling: true
-          supports_vision: false
-    - model_name: llama-coder
-      litellm_params:
-          model: openai/llama-coder
-          api_base: http://llama-coder:8002/v1
-          api_key: "not-needed"
-          max_parallel_requests: 1
           timeout: 1800
           <<: *local-cost
       model_info:
@@ -51,20 +43,7 @@ model_list:
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
-          supports_vision: true
-    - model_name: llama-fim
-      litellm_params:
-          model: text-completion-openai/llama-fim
-          api_base: http://llama-fim:8004/v1
-          api_key: "not-needed"
-          max_parallel_requests: 1
-          timeout: 120
-          <<: *local-cost
-      model_info:
-          # Raw /v1/completions against a base model: no chat template, so no
-          # tool calling and no reasoning.
-          mode: completion
-          max_input_tokens: 8192
+          supports_vision: false
 # Self-hosted SearXNG (search.hgn.rip) exposed as a Search Tool at
 # /v1/search/searxng. Unscoped -- no key/team restriction below -- so every
 # Virtual Key can call it, same as every Model ID in model_list above.
@@ -95,9 +74,10 @@ litellm_settings:
     # hardcoded to 200 entries shared by every Model ID (Cache() takes no
     # max_size_in_memory, no env knob), so it wasn't doing much either, and
     # pointing at an already-running Redis costs nothing. llama-fim's raw
-    # completions are the workload where it might actually pay off. If the
-    # Prometheus litellm_*cache* series still shows ~0 hits, set cache: false
-    # rather than trying a third backend.
+    # completions were the one workload where it might actually have paid
+    # off, and ADR 0009 removed them, so expect the hit rate to go to zero.
+    # If the Prometheus litellm_*cache* series confirms that, set
+    # cache: false rather than trying a third backend.
     #
     # Unchanged consequence worth knowing: an identical request replays the
     # stored answer for the whole ttl, so "regenerate" in a Client returns the

@@ -2,7 +2,7 @@
 
 GATEWAY="http://localhost:${GATEWAY_PORT:-4000}"
 
-@test "chat completion with Model ID llama-chat routes to the chat backend" {
+@test "chat completion with Model ID llama-chat routes to the halogen backend" {
   run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
@@ -12,21 +12,22 @@ GATEWAY="http://localhost:${GATEWAY_PORT:-4000}"
   [[ "$output" == *"response from llama-chat"* ]]
 }
 
-@test "chat completion with Model ID llama-coder routes to the coder backend" {
-  run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
-    -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"model": "llama-coder", "messages": [{"role": "user", "content": "hi"}]}'
+# ADR 0009 collapsed three Model IDs into one. This is the regression test for
+# that: llama-coder and llama-fim must not come back by accident, e.g. via a
+# deployment left behind in the DB (STORE_MODEL_IN_DB is on).
+@test "the Gateway exposes exactly one Model ID" {
+  run curl -sf "$GATEWAY/v1/models" \
+    -H "Authorization: Bearer $LITELLM_MASTER_KEY"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"response from llama-coder"* ]]
+  [ "$(echo "$output" | jq -r '[.data[].id] | sort | join(",")')" = "llama-chat" ]
 }
 
-@test "a Key scoped to one Model ID is rejected for another Model ID" {
+@test "a Key scoped to another Model ID is rejected for llama-chat" {
   run curl -sf -X POST "$GATEWAY/key/generate" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"models": ["llama-chat"]}'
+    -d '{"models": ["some-other-model"]}'
   [ "$status" -eq 0 ]
 
   scoped_key=$(echo "$output" | jq -r '.key')
@@ -37,13 +38,15 @@ GATEWAY="http://localhost:${GATEWAY_PORT:-4000}"
     -H "Authorization: Bearer $scoped_key" \
     -H "Content-Type: application/json" \
     -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}'
-  [ "$output" -eq 200 ]
-
-  run curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY/v1/chat/completions" \
-    -H "Authorization: Bearer $scoped_key" \
-    -H "Content-Type: application/json" \
-    -d '{"model": "llama-coder", "messages": [{"role": "user", "content": "hi"}]}'
   [[ "$output" == "401" || "$output" == "403" ]]
+
+  # ... and the master Key still gets through, so the 401 above is the scope
+  # doing its job rather than the deployment being missing altogether.
+  run curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY/v1/chat/completions" \
+    -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"model": "llama-chat", "messages": [{"role": "user", "content": "hi"}]}'
+  [ "$output" -eq 200 ]
 }
 
 # Tolerates the brief window after a restart where litellm is "healthy"
