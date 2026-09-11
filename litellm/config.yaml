@@ -65,6 +65,15 @@ model_list:
           # tool calling and no reasoning.
           mode: completion
           max_input_tokens: 8192
+# Self-hosted SearXNG (search.hgn.rip) exposed as a Search Tool at
+# /v1/search/searxng. Unscoped -- no key/team restriction below -- so every
+# Virtual Key can call it, same as every Model ID in model_list above.
+search_tools:
+    - search_tool_name: searxng
+      litellm_params:
+          search_provider: searxng
+          api_base: https://search.hgn.rip
+
 litellm_settings:
     callbacks: ["prometheus"]
     require_auth_for_metrics_endpoint: false
