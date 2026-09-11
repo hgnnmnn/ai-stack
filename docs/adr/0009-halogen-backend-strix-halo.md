@@ -89,10 +89,30 @@ is a different proposition from `llama-coder`'s projector.
 The `supports_*` flags are verified against `/health` (`make
 halogen-health`), which is authoritative for the running build:
 `parallel_tool_calls` true over a `qwen-xml` wire format, and
-`reasoning_content` present on a real completion through the Gateway. A
-first end-to-end request returned 189 tokens in 5.9 s including prefill and
-reasoning, so roughly 32 tok/s against upstream's 41.7 figure for an
-uninterrupted speculative stream — the same order, measured differently.
+`reasoning_content` present on a real completion through the Gateway.
+
+Decode measured on an idle engine, single stream, greedy, straight at the
+Backend, `in_flight` confirmed 0 between runs:
+
+| prompt shape | tok/s |
+|---|---|
+| counting to 60 | 45.2, 45.6, 49.2, 49.2, 51.7 |
+| code | 37.0 |
+| exposition | 30.3 |
+| prose | 27.6, 35.2 |
+
+Upstream quotes 41.3 speculative against 36.5 serial for one stream, and a
+43.6 mean over ten shapes. This host lands across that band, predictable text
+above it and prose below, which is what upstream says to expect: acceptance
+follows how predictable the text is, so a single shape is not a number worth
+quoting. Through the Gateway the same prompt cost about 0.8 s of wall clock
+on top, with no effect on the drafter. No thermal component: 49 C and 42 W,
+and the fastest counting run was the last one of a series.
+
+Every line the engine logs is prefixed `mtp`, so the drafter is on. Its
+`commit/round` figure is NOT an acceptance rate: it exceeds the 2.0 that a
+depth-1 drafter would cap at, and moves inversely to throughput across these
+shapes. Upstream names it once without defining it. Left uninterpreted.
 
 ## Rolling back
 
