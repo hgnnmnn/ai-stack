@@ -12,7 +12,7 @@ export
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env up down restart restart-backend restart-frontend restart-monitoring restart-imagegen logs ps pull config vulkaninfo stats monitoring monitoring-down imagegen imagegen-down darkmode darkmode-up darkmode-down test clean
+.PHONY: help env up down restart restart-backend restart-frontend logs ps pull config vulkaninfo stats test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -20,7 +20,7 @@ help: ## Show this help
 env: ## Create .env from .env.example if it doesn't exist yet
 	@test -f .env || cp .env.example .env
 
-up: ## Start the stack (Gateway, Postgres, monitoring, and Backends per COMPOSE_FILE)
+up: ## Start the stack (Gateway, Postgres, and Backends per COMPOSE_FILE)
 	$(COMPOSE) up -d
 
 down: ## Stop the stack, keeping volumes
@@ -39,14 +39,6 @@ restart-backend: ## Full restart of backends (docker-compose.backends.yml)
 restart-frontend: ## Full restart of frontend (docker-compose.yml)
 	$(COMPOSE) -f docker-compose.yml down
 	$(COMPOSE) -f docker-compose.yml up -d
-
-restart-monitoring: ## Full restart of monitoring (docker-compose.monitoring.yml)
-	$(COMPOSE) -f docker-compose.monitoring.yml down
-	$(COMPOSE) -f docker-compose.monitoring.yml up -d
-
-restart-imagegen: ## Full restart of Imagegen Mode (docker-compose.comfyui.yml)
-	$(COMPOSE) -f docker-compose.comfyui.yml down
-	$(COMPOSE) -f docker-compose.comfyui.yml up -d
 
 logs: ## Follow logs for the stack, or one service: make logs SERVICE=litellm
 	$(COMPOSE) logs -f $(SERVICE)
@@ -70,34 +62,8 @@ vulkaninfo: ## Verify Vulkan/RADV passthrough (ADR 0003): make vulkaninfo [SERVI
 stats: ## Snapshot memory/CPU usage of both Backends (see README: Memory budget)
 	$(CONTAINER_BIN) stats --no-stream $$($(COMPOSE) ps -q llama-chat llama-coder llama-fim)
 
-monitoring: ## Add optional Grafana/Prometheus monitoring on top of the running stack
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.monitoring.yml" $(COMPOSE) up -d
-
-monitoring-down: ## Stop the optional Grafana/Prometheus monitoring services
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.monitoring.yml" $(COMPOSE) stop prometheus grafana
-
-imagegen: ## Add optional Imagegen Mode (ComfyUI, LAN :8188) on top; builds the ROCm image on first run
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.comfyui.yml" $(COMPOSE) up -d --build
-
-imagegen-down: ## Stop the optional Imagegen Mode (ComfyUI) service
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.comfyui.yml" $(COMPOSE) stop comfyui
-
-darkmode: ## Build litellm-dark-mode:local from the pinned litellm base (github.com/delorenj/litellm-dark-mode)
-	@BASE_IMAGE=$$(grep -m1 'image: ghcr.io/berriai/litellm' docker-compose.yml | awk '{print $$2}'); \
-	echo "Pinning digest for $$BASE_IMAGE..."; \
-	$(CONTAINER_BIN) pull -q $$BASE_IMAGE >/dev/null; \
-	DIGEST=$$($(CONTAINER_BIN) inspect --format='{{index .RepoDigests 0}}' $$BASE_IMAGE); \
-	npx --yes litellm-dark-mode docker --image $$DIGEST --tag litellm-dark-mode:local
-
-darkmode-up: darkmode ## Build (if needed) and start the stack with the dark-mode litellm image (docker-compose.darkmode.yml)
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.darkmode.yml" $(COMPOSE) up -d
-
-darkmode-down: ## Switch the litellm service back to the pinned upstream image
-	COMPOSE_FILE="$(COMPOSE_FILE):docker-compose.darkmode.yml" $(COMPOSE) down litellm
-	$(COMPOSE) up -d --no-deps litellm
-
 test: ## Run the integration test suite against stub Backends
 	tests/run.sh
 
-clean: ## Stop the stack and DELETE its volumes (Postgres/Prometheus/Grafana data)
+clean: ## Stop the stack and DELETE its volumes (Postgres/Redis data)
 	$(COMPOSE) down -v

@@ -3,10 +3,9 @@
 ![Logo](assets/ai-stack-logo.jpeg)
 
 Self-hosted LLM inference stack: local model **Backends** exposed through a single
-**Gateway**, with optional **Imagegen Mode** (ComfyUI) and optional
-Grafana/Prometheus monitoring. See [`CONTEXT.md`](CONTEXT.md) for glossary
-(Backend, Gateway, Model ID, Key, ...) and [`docs/adr/`](docs/adr/) for
-architecture decisions.
+**Gateway**. See [`CONTEXT.md`](CONTEXT.md) for glossary
+(Backend, Gateway, Model ID, Key, ...) and [`docs/adr/decisions.md`](docs/adr/decisions.md)
+for architecture decisions.
 
 ## Motivation
 
@@ -40,8 +39,6 @@ graph TD
         L1["llama-chat\nport 8001"]
         L2["llama-coder\nport 8002"]
         L3["llama-fim\nport 8004"]
-        PM["Prometheus\nport 9090"]
-        GF["Grafana\nport 3000"]
 
         subgraph "GPU (Vulkan/RADV)"
             L1
@@ -56,34 +53,32 @@ graph TD
     GW --> L3
     GW -.-> PG
     GW -.-> RD
-    GW --> PM
-    PM --> GF
 ```
 
 Gateway is LAN-facing on `:4000` (reverse proxy terminates TLS, forwards
 `/v1/*`). Postgres (Keys/spend) and Redis (response cache, rate-limit and
 budget counters, router state) are internal only, with no published port at
-all. Everything else — Backends, ComfyUI, Prometheus — binds `127.0.0.1` only.
+all. Everything else — the Backends — binds `127.0.0.1` only.
 
 Postgres is the system of record; Redis is not. Losing the Redis volume costs
 a cold response cache and reset rate-limit counters, nothing durable. LiteLLM
 has warned since v1.98.0 when it runs without Redis, because every one of
 those is otherwise per-worker — see
 [Redis requirements](https://docs.litellm.ai/docs/proxy/redis_requirements)
-and [ADR 0007](docs/adr/0007-redis-for-gateway-shared-state.md).
+and [ADR 0007](docs/adr/decisions.md#adr-0007--redis-for-gateway-shared-state-even-though-this-runs-a-single-worker).
 
 ### Setup
 
 1. `make env` (copies `.env.example` to `.env`) and fill in:
    - `LITELLM_MASTER_KEY`: `echo "sk-$(openssl rand -hex 32)"`
-   - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`: strong
+   - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`: strong
      random values (`openssl rand -hex 32`)
    - `MODELS_DIR`, `CHAT_MODEL_FILE`, `CODER_MODEL_FILE`, `FIM_MODEL_FILE`,
      `RENDER_GID`, `VIDEO_GID`: see [Backends](#backends)
 2. `make up`
 
 `make help` lists shortcuts (`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/
-`stats`/`monitoring`/`test`/...). On podman, pass
+`stats`/`test`/...). On podman, pass
 `COMPOSE="podman compose" CONTAINER_BIN=podman` to any target.
 
 ### Backends
@@ -98,26 +93,26 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
-| `llama-chat` | 8001 | `Ornith-1.5-35B-A3B` ([HF](https://huggingface.co/bartowski/Ornith-1.5-35B-A3B-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding, vision (`--mmproj`) |
-| `llama-coder` | 8002 | `Qwen3.8-27B`, dense ([HF](https://huggingface.co/bartowski/Qwen3.8-27B-GGUF)) | coding, 256k ctx, MTP self-speculative decoding (draft n-max 3). Dense, not MoE — deliberate, see ADR 0005; vision (`--mmproj`) |
-| `llama-fim` | 8004 | `FIM_MODEL_FILE`, e.g. `Qwen2.5-Coder-7B` ([HF](https://huggingface.co/QuantFactory/Qwen2.5-Coder-7B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>`. Codestral-22B (Suffix-Prefix-Middle, `--spm-infill`) is a drop-in higher-quality/higher-latency rollback, see ADR 0006 |
+| `llama-chat` | 8001 | `KAT-Coder-V2.5-Dev-MTP` ([HF](https://huggingface.co/gbuzhf/KAT-Coder-V2.5-Dev-MTP-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding. No vision projector currently set |
+| `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, 256k ctx (single slot), MTP self-speculative decoding (draft n-max 3), vision (`--mmproj`) |
+| `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `MiniCPM5-2B` ([HF](https://huggingface.co/bartowski/MiniCPM5-2B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
-underlying model is swapped. Both big Backends use a q8_0-quantized KV
-cache, halving KV VRAM vs. the f16 default (ADR 0002): `llama-chat` at
-`ctx-size 524288` (4 × ~131k slots), `llama-coder` at `ctx-size 262144`
-(2 × ~131k slots). `llama-fim` runs a q8_0-KV 8k slot, single parallel
-stream. `make stats` measures actual usage.
+underlying model is swapped. `llama-chat` and `llama-coder` use a
+q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002):
+`llama-chat` at `ctx-size 524288` (4 × ~131k slots), `llama-coder` at
+`ctx-size 262144` (single slot, `--parallel 1`). `llama-fim` runs a
+q8_0-KV 8k slot, single parallel stream. `make stats` measures actual
+usage.
 
 #### Memory budget
 
 All three Backends run `--load-mode mlock` (with `ulimits.memlock: -1`),
 pinning model pages in RAM so the unified-memory iGPU never has to fault
-weights back in from disk. 35B + 27B + 22B of weights plus KV caches share
-this host's 128 GB pool, with ComfyUI's diffusion weights layered on top
-during Imagegen Mode (see [Imagegen Mode](#imagegen-mode-comfyui) — drop
-contexts to 32k first). `make stats` snapshots the real per-container
-memory/CPU usage.
+weights back in from disk. Weights plus KV caches for all three Backends
+share this host's 128 GB pool — `make stats` snapshots the real
+per-container memory/CPU usage (model sizes change often enough that a
+hardcoded figure here would just go stale).
 
 `.env.example` sets `COMPOSE_FILE=docker-compose.yml:docker-compose.backends.yml`
 so plain `docker compose up -d` includes them; `tests/run.sh` is unaffected
@@ -130,13 +125,29 @@ Place GGUF files under `MODELS_DIR` (mounted read-only) and point
 `CHAT_MODEL_FILE`/`CODER_MODEL_FILE`/`FIM_MODEL_FILE` at them. For
 sharded models, point at the first shard (`model-00001-of-000XX.gguf`).
 
-Both `llama-chat` and `llama-coder` run with `--mmproj` for image input:
-`Ornith-1.5-35B-A3B` and `Qwen3.8-27B` each ship their own vision
-projector in the same HF repo as the base model, set via
-`CHAT_MMPROJ_FILE`/`CODER_MMPROJ_FILE`. `llama-chat` is an MoE/hybrid
+Only `llama-coder` currently runs with `--mmproj` for image input:
+`Qwen3.6-35B-A3B` ships its own vision projector in the same HF repo as
+the base model, set via `CODER_MMPROJ_FILE`. It's an MoE/hybrid
 architecture running q8_0 KV cache — the interaction between quantized KV
-and multimodal inference there is unverified, see ADR 0002. `llama-fim`
-needs no projector.
+and multimodal inference there is unverified, see ADR 0002 (originally
+written about `llama-chat` running that same combination; the concern
+carries over to whichever Backend actually pairs vision with a
+quantized-KV MoE/hybrid model). `llama-chat`'s `CHAT_MMPROJ_FILE` is
+unset/commented in `.env.example` since its current model ships no
+projector; `llama-fim` needs no projector either way.
+
+In practice, multimodal has run more reliably on the smaller, MoE model
+here than it did on the larger dense one — small-parameter MoE seems to
+tolerate vision + quantized KV better than a large dense model does, at
+least anecdotally so far. For a single dense model instead of splitting
+chat/coder/FIM across three Backends, see the `feat/halogen-backend`
+branch (its `docs/adr/0009-halogen-backend-strix-halo.md`, not present on
+`main`): it drops llama.cpp entirely for `halogen-flash-server`
+(`ghcr.io/peonist-ai/halogen-flash-server`), a closed-source engine built
+for exactly this GPU (gfx1151), serving one consolidated `Qwen3.8`-based
+model. Vision exists there too but is off by default
+(`HALOGEN_VISION_TOWER`) — the small-vs-large vision tradeoff moves, it
+doesn't disappear.
 
 #### GPU passthrough GIDs
 
@@ -176,60 +187,7 @@ per machine, not per container.
 2. `docker compose up -d llama-chat`, test `http://127.0.0.1:8001/v1/chat/completions`.
 3. `docker compose up -d llama-coder`, test `http://127.0.0.1:8002/v1/chat/completions`.
 4. `docker compose up -d llama-fim`, test `http://127.0.0.1:8004/v1/completions` (raw FIM prompt).
-5. `docker compose up -d` for the rest (litellm, postgres, redis). Monitoring
-   is layered on separately, see [Monitoring](#monitoring).
-
-#### Imagegen Mode (ComfyUI)
-
-Optional ComfyUI backend (LAN-facing, port 8188), defined in
-`docker-compose.comfyui.yml` and kept out of the default `COMPOSE_FILE` like
-monitoring:
-
-```sh
-make imagegen        # bring up (builds the ROCm image on first run)
-make imagegen-down   # tear down
-```
-
-Unlike the Vulkan LLM Backends, ComfyUI needs ROCm for the Strix Halo iGPU
-(gfx1151), so the compose file **builds** a TheRock/gfx1151 image (no
-compose-friendly one is published) — the first `make imagegen` takes several
-minutes. Point `COMFY_MODELS_DIR` (`.env`) at your diffusion weights
-(FLUX.1-schnell / SD3.5). See ADR 0004 (ComfyUI over `stable-diffusion.cpp` for
-OpenWebUI's native image-gen dialogs).
-
-When running image generation alongside the LLMs on this unified-memory GPU,
-shrink both Backends' context (e.g. to 32k) to free memory for diffusion
-weights, then `make restart-backend`.
-
-### Monitoring
-
-Optional, defined in `docker-compose.monitoring.yml` (kept out of the
-default `COMPOSE_FILE`):
-
-```sh
-make monitoring        # bring up
-make monitoring-down   # tear down
-```
-
-- Grafana: LAN-facing `:3000`, login `admin` / `GRAFANA_ADMIN_PASSWORD`,
-  Prometheus datasource pre-provisioned.
-- Prometheus: `127.0.0.1:9090`, scrapes litellm's `/metrics` (request count,
-  latency, errors per Model ID/Key).
-
-### Dark mode
-
-Optional, defined in `docker-compose.darkmode.yml` (kept out of the default
-`COMPOSE_FILE`). Patches the litellm dashboard's static export for dark mode
-via [delorenj/litellm-dark-mode](https://github.com/delorenj/litellm-dark-mode)
-and builds a local `litellm-dark-mode:local` image from the pinned base:
-
-```sh
-make darkmode-up       # build litellm-dark-mode:local and start with it
-make darkmode-down     # switch back to the pinned upstream image
-```
-
-`make darkmode` alone just (re)builds the image. Rerun it after bumping the
-litellm base image in `docker-compose.yml`.
+5. `docker compose up -d` for the rest (litellm, postgres, redis).
 
 ### Issuing Keys
 
@@ -255,14 +213,14 @@ with `POST /key/delete`, inspect with `GET /key/info?key=...`.
 make test
 ```
 
-Brings up litellm + Postgres + Redis + Prometheus + Grafana alongside stub
+Brings up litellm + Postgres + Redis alongside stub
 Backends (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
 Requires [bats](https://github.com/bats-core/bats-core) on `PATH`.
 
-The suite runs in its own compose project (`-p ai-stack-test`) on remapped
-localhost ports (4100/9190/3100), so it is safe to run while the real stack
+The suite runs in its own compose project (`-p ai-stack-test`) on a remapped
+localhost port (4100), so it is safe to run while the real stack
 is up — its teardown is `down -v`, which under the default project name would
-delete the live Postgres/Redis/Grafana volumes.
+delete the live Postgres/Redis volumes.
 
 ## Acknowledgements
 
