@@ -98,12 +98,11 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 | `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `MiniCPM5-2B` ([HF](https://huggingface.co/bartowski/MiniCPM5-2B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
-underlying model is swapped. `llama-coder` and `llama-fim` use a
-q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002);
-`llama-chat` currently runs f16. `llama-chat` is at `ctx-size 524288`
-(4 × ~131k slots), `llama-coder` at `ctx-size 524288` (2 × 256k slots),
-`llama-fim` an 8k slot, single parallel stream. `make stats` measures
-actual usage.
+underlying model is swapped. All three Backends use a q8_0-quantized KV
+cache, halving KV VRAM vs. the f16 default (ADR 0002): `llama-chat` at
+`ctx-size 524288` (4 × ~131k slots), `llama-coder` at `ctx-size 524288`
+(2 × 256k slots), `llama-fim` an 8k slot, single parallel stream. `make
+stats` measures actual usage.
 
 #### Memory budget
 

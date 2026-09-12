@@ -43,6 +43,10 @@ services:
             - "999"
             - --load-mode
             - mlock
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
             - --jinja
             - --reasoning-format
             - auto
