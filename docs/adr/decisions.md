@@ -37,6 +37,12 @@ Both Backends use flash attention, but only `llama-coder` runs with q8-quantized
 
 A single (unverified) community measurement on a 122B-A10B MoE model found f16/f16 KV cache outperforming quantized KV at 131k context on gfx1151 hardware, contradicting the "quantize KV to buy context headroom" assumption this ADR relies on. Not yet reproduced on our models/build. If prompt-processing or generation speed at deep context ever looks off, benchmark q8_0 vs f16 KV directly with `llama-bench -d 0,65536,131072,262144` before assuming the quantized cache is a free win.
 
+### Update (2026-09-12): q8_0 KV reinstated on the coder Backend, now sized for two concurrent 256k streams
+
+`llama-coder` (currently `Qwen3.6-35B-A3B`, an MoE/hybrid architecture with `--mmproj` vision active) had lost its `--cache-type-k/v q8_0` flags at some point — it was running f16 KV, silently. They're back, and `--ctx-size`/`--parallel` moved from `262144`/`1` to `524288`/`2`, i.e. two 256k slots instead of one. The original blocker this ADR opened with — quantized KV combined with multimodal inference on a hybrid architecture being unverified — is back in play for `llama-coder` specifically, same as it's already noted above for `llama-chat`; watch for degraded image understanding on whichever Backend currently pairs vision with quantized KV.
+
+Also worth recording: MTP self-speculative decoding (`--spec-type draft-mtp`) is understood to drop out once a second parallel stream starts generating (observed on the halogen backend, `feat/halogen-backend` branch, ADR 0009 — "speculation is off the moment a second stream is generating"). The flag is left enabled on `llama-coder` regardless, since a lone request still benefits from it; two concurrent requests just fall back to non-speculative decoding for as long as both are active.
+
 ## ADR 0003 — Vulkan (RADV) as the GPU backend for the LLM Backends
 
 `llama-chat` and `llama-coder` use llama.cpp's Vulkan backend via Mesa's RADV driver, not ROCm. ROCm is currently unusable due to a library version mismatch (ROCm 6 expected by available llama.cpp images vs. system ROCm 7.1.1). Beyond that, community benchmarks for Strix Halo (gfx1151, see [amd-strix-halo-toolboxes](https://kyuz0.github.io/amd-strix-halo-toolboxes/)) show ROCm 7.2.3 and other ROCm builds offer no meaningful performance advantage over Vulkan when serving Qwen models — so this choice isn't expected to change even if the compatibility issue gets resolved.

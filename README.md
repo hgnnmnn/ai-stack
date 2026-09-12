@@ -94,16 +94,16 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
 | `llama-chat` | 8001 | `KAT-Coder-V2.5-Dev-MTP` ([HF](https://huggingface.co/gbuzhf/KAT-Coder-V2.5-Dev-MTP-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding. No vision projector currently set |
-| `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, 256k ctx (single slot), MTP self-speculative decoding (draft n-max 3), vision (`--mmproj`) |
+| `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, `--parallel 2` (two 256k slots), MTP self-speculative decoding (draft n-max 3) — MTP drops out once a second stream is generating, kept on anyway for the single-stream case; vision (`--mmproj`) |
 | `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `MiniCPM5-2B` ([HF](https://huggingface.co/bartowski/MiniCPM5-2B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
-underlying model is swapped. `llama-chat` and `llama-coder` use a
-q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002):
-`llama-chat` at `ctx-size 524288` (4 × ~131k slots), `llama-coder` at
-`ctx-size 262144` (single slot, `--parallel 1`). `llama-fim` runs a
-q8_0-KV 8k slot, single parallel stream. `make stats` measures actual
-usage.
+underlying model is swapped. `llama-coder` and `llama-fim` use a
+q8_0-quantized KV cache, halving KV VRAM vs. the f16 default (ADR 0002);
+`llama-chat` currently runs f16. `llama-chat` is at `ctx-size 524288`
+(4 × ~131k slots), `llama-coder` at `ctx-size 524288` (2 × 256k slots),
+`llama-fim` an 8k slot, single parallel stream. `make stats` measures
+actual usage.
 
 #### Memory budget
 

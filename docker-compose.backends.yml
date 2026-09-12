@@ -88,15 +88,19 @@ services:
             - --port
             - "8002"
             - --ctx-size
-            - "262144"
+            - "524288"
             - --parallel
-            - "1"
+            - "2"
             - --flash-attn
             - "on"
             - --n-gpu-layers
             - "999"
             - --load-mode
             - mlock
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
             - --jinja
             - --reasoning-format
             - auto
