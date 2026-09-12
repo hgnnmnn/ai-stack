@@ -55,11 +55,13 @@ services:
             - --spec-draft-n-max
             - "3"
             - --temp
-            - "0.6"
+            - "0.7"
             - --top-p
-            - "0.95"
+            - "0.8"
             - --top-k
             - "20"
+            - --presence-penalty
+            - "1.5"
             - --reasoning-preserve
             - --cont-batching
             - --metrics
@@ -120,14 +122,6 @@ services:
             - "20"
             - --min-p
             - "0.0"
-            - --presence-penalty
-            - "0.0"
-            - --repeat-penalty
-            - "1.0"
-            - --reasoning-preserve
-            - --chat-template-kwargs
-            - '{"reasoning_effort": "medium"}'
-            - --cont-batching
             - --metrics
         healthcheck:
             test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
@@ -172,11 +166,11 @@ services:
             - --cache-reuse
             - "256"
             - --temp
-            - "0.2"
+            - "1.0"
             - --top-p
             - "0.95"
             - --top-k
-            - "20"
+            - "40"
             - --min-p
             - "0.0"
             - --repeat-penalty
