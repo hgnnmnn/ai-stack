@@ -104,6 +104,13 @@ general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
     database_url: os.environ/DATABASE_URL
     use_x_forwarded_for: true
+    # Closes the "environment-credential login" path LiteLLM warns about
+    # since v1.102: without this, anyone with LITELLM_MASTER_KEY (or
+    # UI_USERNAME/UI_PASSWORD, unused here) can sign in to /ui as a shared
+    # proxy-admin identity. Requires a DB-backed admin user (Internal Users
+    # tab, role Proxy Admin, own password) to already exist and be verified
+    # working -- flipping this before that locks out /ui entirely.
+    disable_env_credential_login: true
     mcp_trusted_proxy_ranges:
         - "10.0.0.0/24"
 
