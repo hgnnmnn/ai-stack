@@ -46,7 +46,7 @@ services:
     # Password passed through the shell rather than inline so it doesn't land
     # in `make config` output. Internal only, no published port.
     redis:
-        image: redis:8.10.1-alpine
+        image: redis:8.10.2-alpine
         restart: unless-stopped
         environment:
             REDIS_PASSWORD: ${REDIS_PASSWORD}
