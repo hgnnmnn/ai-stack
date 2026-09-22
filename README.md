@@ -93,7 +93,7 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
-| `llama-chat` | 8001 | `KAT-Coder-V2.5-Dev-MTP` ([HF](https://huggingface.co/gbuzhf/KAT-Coder-V2.5-Dev-MTP-GGUF)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding. No vision projector currently set |
+| `llama-chat` | 8001 | `Tiel-Coder-35B-A3B`, MoE ([HF](https://huggingface.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding (draft n-max 1); vision (`--mmproj`) |
 | `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, `--parallel 2` (two 256k slots), MTP self-speculative decoding (draft n-max 3) — MTP drops out once a second stream is generating, kept on anyway for the single-stream case; vision (`--mmproj`) |
 | `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `MiniCPM5-2B` ([HF](https://huggingface.co/bartowski/MiniCPM5-2B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
 
@@ -124,16 +124,14 @@ Place GGUF files under `MODELS_DIR` (mounted read-only) and point
 `CHAT_MODEL_FILE`/`CODER_MODEL_FILE`/`FIM_MODEL_FILE` at them. For
 sharded models, point at the first shard (`model-00001-of-000XX.gguf`).
 
-Only `llama-coder` currently runs with `--mmproj` for image input:
-`Qwen3.6-35B-A3B` ships its own vision projector in the same HF repo as
-the base model, set via `CODER_MMPROJ_FILE`. It's an MoE/hybrid
-architecture running q8_0 KV cache — the interaction between quantized KV
-and multimodal inference there is unverified, see ADR 0002 (originally
-written about `llama-chat` running that same combination; the concern
-carries over to whichever Backend actually pairs vision with a
-quantized-KV MoE/hybrid model). `llama-chat`'s `CHAT_MMPROJ_FILE` is
-unset/commented in `.env.example` since its current model ships no
-projector; `llama-fim` needs no projector either way.
+`llama-chat` and `llama-coder` both run with `--mmproj` for image input:
+`Tiel-Coder-35B-A3B` and `Qwen3.6-35B-A3B` each ship their own vision
+projector in the same HF repo as the base model, set via
+`CHAT_MMPROJ_FILE`/`CODER_MMPROJ_FILE`. Both are MoE architectures running
+q8_0 KV cache — the interaction between quantized KV and multimodal
+inference there is unverified, see ADR 0002 (originally written about
+`llama-chat` running that same combination; the concern applies to both
+Backends now). `llama-fim` needs no projector.
 
 In practice, multimodal has run more reliably on the smaller, MoE model
 here than it did on the larger dense one — small-parameter MoE seems to
