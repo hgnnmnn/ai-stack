@@ -45,6 +45,25 @@ services:
             timeout: 5s
             retries: 5
 
+    llama-fim:
+        image: ai-stack-llama-fim-stub
+        build: ./tests/stubs
+        command: ["python", "/server.py"]
+        environment:
+            STUB_MODEL_ID: llama-fim
+            STUB_PORT: "8004"
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
     litellm:
         ports: !override
             - "127.0.0.1:${GATEWAY_PORT}:4000"
@@ -52,6 +71,8 @@ services:
             llama-chat:
                 condition: service_healthy
             llama-coder:
+                condition: service_healthy
+            llama-fim:
                 condition: service_healthy
             postgres:
                 condition: service_healthy

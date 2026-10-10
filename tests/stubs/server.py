@@ -29,6 +29,21 @@ class Handler(BaseHTTPRequestHandler):
                 }],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             })
+        elif self.path == "/v1/completions":
+            length = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(length)
+            self._json(200, {
+                "id": f"stub-{uuid.uuid4()}",
+                "object": "text_completion",
+                "model": MODEL_ID,
+                "choices": [{
+                    "index": 0,
+                    "text": f"response from {MODEL_ID}",
+                    "logprobs": None,
+                    "finish_reason": "stop",
+                }],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            })
         else:
             self._json(404, {"error": "not found"})
 

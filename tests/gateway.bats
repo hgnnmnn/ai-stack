@@ -86,13 +86,14 @@ spend_log_count() {
   [ "$persisted" -ge "$after" ]
 }
 
-# The response cache is Redis-backed (litellm/config.yaml.tmpl cache_params). The
-# stub mints a fresh id per call, so an identical second request coming back
-# with the same id means it was served out of Redis, not from the Backend.
-@test "identical requests are served from the Redis response cache" {
-  body='{"model": "llama-chat", "messages": [{"role": "user", "content": "redis cache probe"}]}'
+# The response cache is Redis-backed and scoped to raw completions and
+# embeddings (litellm/config.yaml.tmpl cache_params, ADR 0007). The stub mints
+# a fresh id per call, so an identical second request coming back with the
+# same id means it was served out of Redis, not from the Backend.
+@test "identical text completions are served from the Redis response cache" {
+  body='{"model": "llama-fim", "prompt": "redis cache probe", "max_tokens": 4}'
 
-  run curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+  run curl -sf -X POST "$GATEWAY/v1/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H "Content-Type: application/json" \
     -d "$body"
@@ -105,7 +106,7 @@ spend_log_count() {
   # guaranteed on the very next request.
   second=""
   for _ in $(seq 1 10); do
-    second=$(curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+    second=$(curl -sf -X POST "$GATEWAY/v1/completions" \
       -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
       -H "Content-Type: application/json" \
       -d "$body" | jq -r '.id')
@@ -113,4 +114,26 @@ spend_log_count() {
     sleep 1
   done
   [ "$second" = "$first" ]
+}
+
+# Chat is deliberately not cached: a replayed answer breaks "regenerate" and
+# hands an agent that resends an identical history the same answer again.
+@test "identical chat completions are not served from the cache" {
+  body='{"model": "llama-chat", "messages": [{"role": "user", "content": "no cache probe"}]}'
+
+  first=$(curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+    -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$body" | jq -r '.id')
+  [ -n "$first" ]
+  [ "$first" != "null" ]
+
+  # Longer than the cache-write window the test above polls through.
+  sleep 3
+  second=$(curl -sf -X POST "$GATEWAY/v1/chat/completions" \
+    -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$body" | jq -r '.id')
+  [ -n "$second" ]
+  [ "$second" != "$first" ]
 }

@@ -21,6 +21,16 @@ The LiteLLM gateway (port 4000) must be reachable by an external reverse proxy o
 
 The reverse proxy's network is stable at `10.0.0.0/24`. This is now used to fix a LiteLLM MCP-access-control gap (a request carrying an `X-Forwarded-For` header was otherwise ignored, so the proxy's peer IP — falling inside `mcp_internal_ip_ranges` — made every external caller look internal to MCP server access control): `litellm/config.yaml` (generated from `litellm/config.yaml.tmpl`) sets `general_settings.use_x_forwarded_for: true` and `mcp_trusted_proxy_ranges: ["10.0.0.0/24"]`, so only XFF headers arriving from that subnet are trusted. This is narrower than a firewall rule (it only affects MCP-internal-IP evaluation, not the port-4000 exposure decision above) — the no-firewall decision itself is unchanged, since API-key auth still covers `/v1/*`.
 
+### Update (2026-10-10): trust pinned to the proxy's /32, hop count set
+
+`10.0.0.0/24` turned out to be the whole LAN, not a separate proxy network: this host is `10.0.0.90` and the Reverse Proxy is `10.0.0.11`. As a result, every LAN device was a "trusted proxy". Three changes in `litellm/config.yaml.tmpl`:
+
+- `mcp_trusted_proxy_ranges` is now `10.0.0.11/32`.
+- `mcp_xff_num_trusted_hops: 1`. The MCP client IP is now read from the entry the proxy appends, not from the leftmost entry, which the caller controls. Before this, an internet caller sending `X-Forwarded-For: 10.0.0.5` through an appending proxy counted as internal.
+- `trusted_proxy_ranges: 10.0.0.11/32`. This turns on LiteLLM's per-source-address throttling of Admin UI sign-ins.
+
+The proxy also forwards `/ui`, not only `/v1/*` as written above. The Admin UI is therefore reachable from the internet, protected by its login and the throttling. The no-firewall decision is unchanged, but this is part of the exposure it accepts. If the proxy IP changes, update both ranges.
+
 ## ADR 0002 — KV cache quantization applied to the coder Backend only
 
 Both Backends use flash attention, but only `llama-coder` runs with q8-quantized KV cache (k & v) to reach 128k–256k context. `llama-chat` keeps f16 KV cache at 65k context. Qwen3.6-35B-A3B uses a hybrid Gated DeltaNet/Gated Attention architecture with a vision encoder, and neither the model card nor llama.cpp document how KV cache quantization interacts with multimodal inference on this architecture — quantizing risks silently degrading or breaking vision capability. Revisit once this has been empirically validated.
@@ -176,6 +186,30 @@ If cache hit rates (litellm's own `litellm_*cache*` metrics, e.g. via its
 `/metrics` endpoint) still look near zero, the honest move is `cache: false`,
 not a third cache backend. Redis stays either way; the two decisions are
 independent.
+
+### Update (2026-10-10): measured, cache scoped to raw completions and embeddings
+
+The hypothesis above has data now. From `LiteLLM_SpendLogs.cache_hit` over
+2026-09-10..10-10 (31-day retention window, Redis-backed throughout):
+
+| Model ID | hits | requests | hit rate |
+| --- | --- | --- | --- |
+| `llama-fim` (text completions) | 111 | ~990 | ~11% |
+| `llama-coder` (chat) | 19 | ~1600 | 1.2% |
+| `llama-chat` (chat) | 14 | ~2900 | 0.5% |
+| cloud chat models in the DB | ~0 | ~900 | ~0% |
+
+So both halves of the original argument held: chat is near zero, FIM is not.
+Instead of `cache: false`, `cache_params.supported_call_types` is now
+restricted to `text_completion`/`atext_completion` and
+`embedding`/`aembedding`. That keeps the FIM hits, and it drops chat
+caching, where the few hits were mostly the harmful kind: "regenerate"
+returning the same text, and an agent that resends an identical history
+getting back the same, possibly broken, answer instead of a fresh sample.
+The second one could plausibly feed the coder/chat looping that is still
+open. That link is a guess, not a measurement. Verified on v1.104.2
+against a local fake Backend: two identical text completions made one
+Backend call, two identical chat requests made two.
 
 ### Consequences, most surprising first
 
