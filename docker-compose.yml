@@ -13,7 +13,9 @@ services:
             REDIS_PORT: "6379"
             REDIS_PASSWORD: ${REDIS_PASSWORD}
         volumes:
-            - ./litellm/config.yaml:/app/config.yaml:ro,Z
+            # Rendered by scripts/render-litellm-config.sh; tests/test.env
+            # points this at its own file (see there).
+            - ${LITELLM_CONFIG_FILE:-./litellm/config.yaml}:/app/config.yaml:ro,Z
         command: ["--config", "/app/config.yaml"]
         depends_on:
             postgres:

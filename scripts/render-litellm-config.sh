@@ -3,6 +3,9 @@
 # (CHAT_ARGS / CODER_ARGS / FIM_ARGS) are the single source: --ctx-size and
 # --parallel (-> per-slot context) are read from them, supports_vision from *_MMPROJ_FILE.
 # Usage: scripts/render-litellm-config.sh [env-file]   (default: .env)
+# Output goes to LITELLM_CONFIG_FILE from the env file (the same variable
+# docker-compose.yml mounts), else litellm/config.yaml. tests/test.env points
+# it elsewhere so `make test` never overwrites the file the live Gateway reads.
 #
 # .env is parsed, not sourced: its values are unquoted flag lists with spaces
 # (they must stay that way for make and compose), which bash would execute.
@@ -42,11 +45,14 @@ for p in CHAT CODER; do
   if [ -n "$(var "${p}_MMPROJ_FILE")" ]; then export "${p}_VISION=true"; else export "${p}_VISION=false"; fi
 done
 
+out="$(var LITELLM_CONFIG_FILE)"
+out="${out:-litellm/config.yaml}"
+
 vars='${CHAT_CTX_PER_SLOT} ${CHAT_VISION} ${CODER_CTX_PER_SLOT} ${CODER_VISION} ${FIM_CTX_PER_SLOT}'
-tmp="$(mktemp litellm/config.yaml.XXXXXX)"
+tmp="$(mktemp "$out.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 envsubst "$vars" < litellm/config.yaml.tmpl > "$tmp"
 chmod 644 "$tmp"
-mv "$tmp" litellm/config.yaml
+mv "$tmp" "$out"
 trap - EXIT
-echo "litellm/config.yaml rendered:$summary"
+echo "$out rendered:$summary"

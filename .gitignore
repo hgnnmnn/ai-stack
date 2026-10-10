@@ -5,3 +5,4 @@ __pycache__/
 
 # Generated from litellm/config.yaml.tmpl by scripts/render-litellm-config.sh
 litellm/config.yaml
+tests/litellm-config.yaml

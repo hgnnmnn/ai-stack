@@ -16,9 +16,11 @@ trap cleanup EXIT
 
 scripts/render-litellm-config.sh tests/test.env
 
-set -a
-source tests/test.env
-set +a
+# Parsed, not sourced: the *_ARGS lines are unquoted flag lists with spaces,
+# which bash would try to execute. The suite only reads these two.
+for v in GATEWAY_PORT LITELLM_MASTER_KEY; do
+  export "$v=$(grep -E "^$v=" tests/test.env | tail -n 1 | cut -d= -f2-)"
+done
 
 $COMPOSE up -d --build --wait
 bats tests/*.bats

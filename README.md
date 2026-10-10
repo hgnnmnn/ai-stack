@@ -234,8 +234,10 @@ with `POST /key/delete`, inspect with `GET /key/info?key=...`.
 make test
 ```
 
-Renders `litellm/config.yaml` from `tests/test.env` (it carries minimal
-`*_ARGS` with `--ctx-size`/`--parallel` for the renderer), then brings up litellm + Postgres + Redis alongside stub
+Renders `tests/litellm-config.yaml` from `tests/test.env` (it carries minimal
+`*_ARGS` with `--ctx-size`/`--parallel` for the renderer, and
+`LITELLM_CONFIG_FILE` so the live Gateway's `litellm/config.yaml` is never
+touched), then brings up litellm + Postgres + Redis alongside stub
 Backends (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
 Requires [bats](https://github.com/bats-core/bats-core) on `PATH`.
 
