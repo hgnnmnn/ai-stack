@@ -5,66 +5,72 @@ x-local-cost: &local-cost
     input_cost_per_token: 0.00000002
     output_cost_per_token: 0.00000002
 
-# max_input_tokens is the per-slot context, i.e. --ctx-size / --parallel from
-# docker-compose.backends.yml, NOT --ctx-size itself: a single request only
-# ever sees one slot. Verified against each Backend's /props (n_ctx).
-# max_parallel_requests mirrors --parallel so requests queue at the Gateway
-# instead of piling up inside llama.cpp.
+# TEMPLATE. litellm/config.yaml is generated from this file by
+# scripts/render-litellm-config.sh (`make litellm-config`, run automatically
+# by `make up`); edit this file, not the output. The ${...} placeholders are
+# derived from the same *_ARGS lines in .env that docker-compose.backends.yml
+# hands to llama-server, so Backend and Gateway can't drift apart:
+#   *_CTX_PER_SLOT  <- --ctx-size / --parallel; max_input_tokens (NOT the total
+#                      --ctx-size: a single request only ever sees one slot;
+#                      matches /props n_ctx)
+#   *_VISION        <- true iff *_MMPROJ_FILE is set in .env
+# max_parallel_requests is deliberately NOT set. LiteLLM answers the request
+# over the limit with an immediate 429 (router MaxParallelRequestsLimit), it
+# does not queue; without the limit, surplus requests wait inside llama-server
+# until a slot is free. Verified in litellm-database v1.104.2 and by the
+# llama-coder 429s in Zed when it was 1 against --parallel 2.
+# supports_reasoning / supports_function_calling stay hand-set below; they
+# come from the model's chat template and are not readable from /props.
 #
 # The supports_* flags drive the Model Hub "Features" column and what Clients
 # are told they may send. Both chat Backends run --jinja, so tool calling and
 # reasoning come from the model's own chat template; verified live against
 # each Backend (single + parallel tool call, reasoning_content present).
-# supports_vision: true on both -- docker-compose.backends.yml passes
-# --mmproj for each, and both current models (Ornith-1.5-35B-A3B,
-# Qwen3.8-27B) ship their own vision projector. llama-chat is MoE/hybrid
-# like the old Qwen3.6-35B-A3B ADR 0002 flagged for q8_0 KV + multimodal
-# risk -- watch for degraded image understanding, not yet empirically
-# ruled out on this model.
+# supports_vision follows *_MMPROJ_FILE (see above). Both chat Backends are
+# MoE/hybrid models with q8_0 KV cache plus a vision projector, the combination
+# ADR 0002 flagged as a risk -- watch for degraded image understanding, not yet
+# empirically ruled out.
 model_list:
     - model_name: llama-chat
       litellm_params:
           model: openai/llama-chat
           api_base: http://llama-chat:8001/v1
           api_key: "not-needed"
-          max_parallel_requests: 4
           timeout: 1800
           <<: *local-cost
       model_info:
           mode: chat
-          max_input_tokens: 131072
+          max_input_tokens: ${CHAT_CTX_PER_SLOT}
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
-          supports_vision: false
+          supports_vision: ${CHAT_VISION}
     - model_name: llama-coder
       litellm_params:
           model: openai/llama-coder
           api_base: http://llama-coder:8002/v1
           api_key: "not-needed"
-          max_parallel_requests: 1
           timeout: 1800
           <<: *local-cost
       model_info:
           mode: chat
-          max_input_tokens: 262144
+          max_input_tokens: ${CODER_CTX_PER_SLOT}
           supports_reasoning: true
           supports_function_calling: true
           supports_parallel_function_calling: true
-          supports_vision: true
+          supports_vision: ${CODER_VISION}
     - model_name: llama-fim
       litellm_params:
           model: text-completion-openai/llama-fim
           api_base: http://llama-fim:8004/v1
           api_key: "not-needed"
-          max_parallel_requests: 1
           timeout: 120
           <<: *local-cost
       model_info:
           # Raw /v1/completions against a base model: no chat template, so no
           # tool calling and no reasoning.
           mode: completion
-          max_input_tokens: 8192
+          max_input_tokens: ${FIM_CTX_PER_SLOT}
 litellm_settings:
     callbacks: ["prometheus"]
     require_auth_for_metrics_endpoint: false

@@ -14,6 +14,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
+scripts/render-litellm-config.sh tests/test.env
+
 set -a
 source tests/test.env
 set +a

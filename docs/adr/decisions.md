@@ -19,7 +19,7 @@ The LiteLLM gateway (port 4000) must be reachable by an external reverse proxy o
 
 ### Update (2026-08-11): reverse proxy CIDR now pinned for MCP trust, not firewalling
 
-The reverse proxy's network is stable at `10.0.0.0/24`. This is now used to fix a LiteLLM MCP-access-control gap (a request carrying an `X-Forwarded-For` header was otherwise ignored, so the proxy's peer IP — falling inside `mcp_internal_ip_ranges` — made every external caller look internal to MCP server access control): `litellm/config.yaml` sets `general_settings.use_x_forwarded_for: true` and `mcp_trusted_proxy_ranges: ["10.0.0.0/24"]`, so only XFF headers arriving from that subnet are trusted. This is narrower than a firewall rule (it only affects MCP-internal-IP evaluation, not the port-4000 exposure decision above) — the no-firewall decision itself is unchanged, since API-key auth still covers `/v1/*`.
+The reverse proxy's network is stable at `10.0.0.0/24`. This is now used to fix a LiteLLM MCP-access-control gap (a request carrying an `X-Forwarded-For` header was otherwise ignored, so the proxy's peer IP — falling inside `mcp_internal_ip_ranges` — made every external caller look internal to MCP server access control): `litellm/config.yaml` (generated from `litellm/config.yaml.tmpl`) sets `general_settings.use_x_forwarded_for: true` and `mcp_trusted_proxy_ranges: ["10.0.0.0/24"]`, so only XFF headers arriving from that subnet are trusted. This is narrower than a firewall rule (it only affects MCP-internal-IP evaluation, not the port-4000 exposure decision above) — the no-firewall decision itself is unchanged, since API-key auth still covers `/v1/*`.
 
 ## ADR 0002 — KV cache quantization applied to the coder Backend only
 

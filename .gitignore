@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .claude
+
+# Generated from litellm/config.yaml.tmpl by scripts/render-litellm-config.sh
+litellm/config.yaml

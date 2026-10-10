@@ -86,7 +86,7 @@ spend_log_count() {
   [ "$persisted" -ge "$after" ]
 }
 
-# The response cache is Redis-backed (litellm/config.yaml cache_params). The
+# The response cache is Redis-backed (litellm/config.yaml.tmpl cache_params). The
 # stub mints a fresh id per call, so an identical second request coming back
 # with the same id means it was served out of Redis, not from the Backend.
 @test "identical requests are served from the Redis response cache" {

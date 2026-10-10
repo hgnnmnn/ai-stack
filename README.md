@@ -75,9 +75,10 @@ and [ADR 0007](docs/adr/decisions.md#adr-0007--redis-for-gateway-shared-state-ev
      random values (`openssl rand -hex 32`)
    - `MODELS_DIR`, `CHAT_MODEL_FILE`, `CODER_MODEL_FILE`, `FIM_MODEL_FILE`,
      `RENDER_GID`, `VIDEO_GID`: see [Backends](#backends)
-2. `make up`
+2. `make up` (renders `litellm/config.yaml` first, see
+   [Slots and context](#slots-and-context))
 
-`make help` lists shortcuts (`up`/`down`/`logs`/`ps`/`config`/`vulkaninfo`/
+`make help` lists shortcuts (`up`/`down`/`logs`/`ps`/`config`/`litellm-config`/`vulkaninfo`/
 `stats`/`test`/...). On podman, pass
 `COMPOSE="podman compose" CONTAINER_BIN=podman` to any target.
 
@@ -93,9 +94,9 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 
 | Model ID | Port | Model | Notes |
 |---|---|---|---|
-| `llama-chat` | 8001 | `Tiel-Coder-35B-A3B`, MoE ([HF](https://huggingface.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding (draft n-max 1); vision (`--mmproj`) |
-| `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, `--parallel 2` (two 256k slots), MTP self-speculative decoding (draft n-max 3) — MTP drops out once a second stream is generating, kept on anyway for the single-stream case; vision (`--mmproj`) |
-| `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `MiniCPM5-2B` ([HF](https://huggingface.co/bartowski/MiniCPM5-2B-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
+| `llama-chat` | 8001 | `Cyber-Tiel-Coder-35B-A3B`, MoE ([HF](https://huggingface.co/peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-GGUF-MTP)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding (draft n-max 2); vision (`--mmproj`) |
+| `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, `--parallel 2` (two 256k slots), MTP self-speculative decoding (draft n-max 2) — MTP drops out once a second stream is generating, kept on anyway for the single-stream case; vision (`--mmproj`) |
+| `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `Qwen3-Coder-30B-A3B` (one-week trial since 2026-10-10; [HF](https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
 underlying model is swapped. All three Backends use a q8_0-quantized KV
@@ -103,6 +104,28 @@ cache, halving KV VRAM vs. the f16 default (ADR 0002): `llama-chat` at
 `ctx-size 524288` (4 × ~131k slots), `llama-coder` at `ctx-size 524288`
 (2 × 256k slots), `llama-fim` an 8k slot, single parallel stream. `make
 stats` measures actual usage.
+
+#### Slots and context
+
+All `llama-server` flags except model, projector and port live in one line
+per Backend in `.env`: `CHAT_ARGS`, `CODER_ARGS`, `FIM_ARGS` (unquoted, one
+line, no spaces inside a single argument). `docker-compose.backends.yml` starts
+`llama-server` through `sh -c` with `-m $*_MODEL_FILE`, `--mmproj
+$*_MMPROJ_FILE` (only if set) and `$*_ARGS`.
+
+The Gateway reads the same lines: `litellm/config.yaml` is **generated** (and
+gitignored) from `litellm/config.yaml.tmpl` by `make litellm-config`, which
+`make up` and `make restart-backend` run first. It takes `--ctx-size` and
+`--parallel` from `*_ARGS` (both required, long form, `ctx-size` divisible by
+`parallel`) and fills in `max_input_tokens` (the
+per-slot context, `ctx-size / parallel`) and `supports_vision` (true iff
+`*_MMPROJ_FILE` is set). `max_parallel_requests` is deliberately left out:
+LiteLLM answers requests over that limit with an immediate 429 instead of
+queueing, whereas without it surplus requests wait inside `llama-server` until
+a slot frees up. Edit the template, not the output. After changing
+`.env`: `make restart-backend`. Clients like Zed still need `max_tokens` /
+`max_completion_tokens` that fit the per-slot context; that is not automated.
+`supports_reasoning` and the tool-calling flags stay hand-set in the template.
 
 #### Memory budget
 
@@ -125,9 +148,10 @@ Place GGUF files under `MODELS_DIR` (mounted read-only) and point
 sharded models, point at the first shard (`model-00001-of-000XX.gguf`).
 
 `llama-chat` and `llama-coder` both run with `--mmproj` for image input:
-`Tiel-Coder-35B-A3B` and `Qwen3.6-35B-A3B` each ship their own vision
+`Cyber-Tiel-Coder-35B-A3B` and `Qwen3.6-35B-A3B` each ship their own vision
 projector in the same HF repo as the base model, set via
-`CHAT_MMPROJ_FILE`/`CODER_MMPROJ_FILE`. Both are MoE architectures running
+`CHAT_MMPROJ_FILE`/`CODER_MMPROJ_FILE` (optional: leave empty for a text-only
+model, which also turns `supports_vision` off in the Gateway). Both are MoE architectures running
 q8_0 KV cache — the interaction between quantized KV and multimodal
 inference there is unverified, see ADR 0002 (originally written about
 `llama-chat` running that same combination; the concern applies to both
@@ -210,7 +234,8 @@ with `POST /key/delete`, inspect with `GET /key/info?key=...`.
 make test
 ```
 
-Brings up litellm + Postgres + Redis alongside stub
+Renders `litellm/config.yaml` from `tests/test.env` (it carries minimal
+`*_ARGS` with `--ctx-size`/`--parallel` for the renderer), then brings up litellm + Postgres + Redis alongside stub
 Backends (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
 Requires [bats](https://github.com/bats-core/bats-core) on `PATH`.
 

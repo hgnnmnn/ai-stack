@@ -12,7 +12,7 @@ export
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env up down restart restart-backend restart-frontend logs ps pull config vulkaninfo stats test clean
+.PHONY: help env litellm-config up down restart restart-backend restart-frontend logs ps pull config vulkaninfo stats test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -20,7 +20,10 @@ help: ## Show this help
 env: ## Create .env from .env.example if it doesn't exist yet
 	@test -f .env || cp .env.example .env
 
-up: ## Start the stack (Gateway, Postgres, and Backends per COMPOSE_FILE)
+litellm-config: ## Render litellm/config.yaml from litellm/config.yaml.tmpl and .env
+	scripts/render-litellm-config.sh
+
+up: litellm-config ## Start the stack (Gateway, Postgres, and Backends per COMPOSE_FILE)
 	$(COMPOSE) up -d
 
 down: ## Stop the stack, keeping volumes
@@ -32,7 +35,7 @@ restart: ## Restart the stack, or one service: make restart SERVICE=litellm
 # --- Restart groups (down && up per compose file) ---
 # Full stop/start cycle — picks up compose changes. Keeps volumes.
 
-restart-backend: ## Full restart of backends (docker-compose.backends.yml)
+restart-backend: litellm-config ## Full restart of backends (docker-compose.backends.yml)
 	$(COMPOSE) -f docker-compose.yml -f docker-compose.backends.yml down llama-chat llama-coder llama-fim litellm
 	$(COMPOSE) -f docker-compose.yml -f docker-compose.backends.yml up -d --no-deps llama-chat llama-coder llama-fim litellm
 
