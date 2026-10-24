@@ -79,23 +79,18 @@ litellm_settings:
     callbacks: ["prometheus"]
     require_auth_for_metrics_endpoint: false
     drop_params: true
-    # Exact-match response cache, scoped to raw completions and embeddings:
-    # the call types where an identical request legitimately wants an
-    # identical answer. Applies to every deployment, including the ones managed
-    # in the DB rather than here.
-    #
-    # Scoped by measurement, not taste (ADR 0007 asked for exactly this
-    # check). LiteLLM_SpendLogs.cache_hit, 2026-09-10..10-10, Redis-backed
-    # the whole time: llama-fim 111 hits / ~990 text completions (~11%);
-    # llama-chat 14 / ~2900 (0.5%); llama-coder 19 / ~1600 (1.2%); the cloud
-    # chat models in the DB ~0. Chat is near zero for the reason f104cfd
-    # removed the Valkey cache -- every turn carries the full history, so
-    # every request is unique -- and the rare hits it does get are the harmful
-    # kind: "regenerate" replaying the same text even at --temp 1.0, and an
-    # agent that resends an identical history getting the identical (possibly
-    # broken) answer back instead of a fresh sample. Chat, responses and
-    # rerank are therefore no longer cached; a new chat Backend needs no change
-    # here, a new call type worth caching does.
+    # Exact-match response cache for every call type (chat, responses, rerank,
+    # completions, embeddings) and every deployment, including the ones managed
+    # in the DB rather than here. Enabled deliberately despite the numbers:
+    # LiteLLM_SpendLogs.cache_hit, 2026-09-10..10-10, Redis-backed: llama-fim
+    # ~11%, llama-chat 0.5%, llama-coder 1.2%, cloud ~0; on 2026-10-24 at most
+    # ~6% of MiniMax-M3.1-Flash requests repeated an earlier token count, and
+    # ~90% of its prompt tokens were already served by the provider's prefix
+    # cache. Expect near-zero chat hits: every turn carries the full history
+    # (why f104cfd removed the Valkey cache), and a hit replays the identical
+    # text -- "regenerate" and agent retries get no fresh sample. Narrow it
+    # again with cache_params.supported_call_types (text_completion +
+    # embedding was the measured-useful scope) or `cache: false`.
     #
     # Backed by the `redis` service in docker-compose.yml, which exists for the
     # Gateway's rate-limit/budget/router state (ADR 0007), not for this.
@@ -107,11 +102,6 @@ litellm_settings:
         port: os.environ/REDIS_PORT
         password: os.environ/REDIS_PASSWORD
         ttl: 600
-        supported_call_types:
-            - text_completion
-            - atext_completion
-            - embedding
-            - aembedding
 general_settings:
     master_key: os.environ/LITELLM_MASTER_KEY
     database_url: os.environ/DATABASE_URL
