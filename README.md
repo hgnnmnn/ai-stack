@@ -96,13 +96,13 @@ misbehaves, check that library shipped intact before debugging elsewhere.
 |---|---|---|---|
 | `llama-chat` | 8001 | `Cyber-Tiel-Coder-35B-A3B`, MoE ([HF](https://huggingface.co/peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-GGUF-MTP)) | general chat/reasoning, 512k ctx, `--parallel 4` (four ~131k slots), MTP self-speculative decoding (draft n-max 2); vision (`--mmproj`) |
 | `llama-coder` | 8002 | `Qwen3.6-35B-A3B`, MoE ([HF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF)) | coding, `--parallel 2` (two 256k slots), MTP self-speculative decoding (draft n-max 2) — MTP drops out once a second stream is generating, kept on anyway for the single-stream case; vision (`--mmproj`) |
-| `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `Qwen3-Coder-30B-A3B` (one-week trial since 2026-10-10; [HF](https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF)) | fill-in-the-middle, raw `/v1/completions`, no chat template. Prefix-Suffix-Middle FIM order (llama.cpp default, no `--spm-infill`) — Clients must send `<\|fim_prefix\|>{prefix}<\|fim_suffix\|>{suffix}<\|fim_middle\|>` |
+| `llama-fim` | 8004 | `FIM_MODEL_FILE`, currently `Zeta-2.1` Q5_K_M, 8B dense ([HF](https://huggingface.co/adilkairolla/zeta-2.1-GGUF), quantized from [zed-industries/zeta-2.1](https://huggingface.co/zed-industries/zeta-2.1)) | next-edit prediction, raw `/v1/completions`, no chat template. Not a plain FIM model: Suffix-Prefix-Middle prompt with `<[fim-suffix]>`/`<[fim-prefix]>`/`<[fim-middle]>` and numbered `<\|marker_N\|>` editable-region markers; the output is the rewritten region. Clients must send Zeta's prompt format, not `<\|fim_prefix\|>` templates |
 
 Model ID stays a stable alias so Clients/Keys don't change when the
 underlying model is swapped. All three Backends use a q8_0-quantized KV
 cache, halving KV VRAM vs. the f16 default (ADR 0002): `llama-chat` at
 `ctx-size 524288` (4 × ~131k slots), `llama-coder` at `ctx-size 524288`
-(2 × 256k slots), `llama-fim` an 8k slot, single parallel stream. `make
+(2 × 256k slots), `llama-fim` a 16k slot, single parallel stream. `make
 stats` measures actual usage.
 
 #### Slots and context
