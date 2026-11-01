@@ -82,7 +82,7 @@ litellm_settings:
     # Exact-match response cache for every call type (chat, responses, rerank,
     # completions, embeddings) and every deployment, including the ones managed
     # in the DB rather than here. Enabled deliberately despite the numbers:
-    # LiteLLM_SpendLogs.cache_hit, 2026-09-10..10-10, Redis-backed: llama-fim
+    # LiteLLM_SpendLogs.cache_hit, 2026-09-10..10-10, Redis-backed (Valkey since 2026-11-01): llama-fim
     # ~11%, llama-chat 0.5%, llama-coder 1.2%, cloud ~0; on 2026-10-24 at most
     # ~6% of MiniMax-M3.1-Flash requests repeated an earlier token count, and
     # ~90% of its prompt tokens were already served by the provider's prefix
@@ -92,7 +92,8 @@ litellm_settings:
     # again with cache_params.supported_call_types (text_completion +
     # embedding was the measured-useful scope) or `cache: false`.
     #
-    # Backed by the `redis` service in docker-compose.yml, which exists for the
+    # Backed by the `valkey` service in docker-compose.yml (LiteLLM calls the
+    # type `redis`; same protocol), which exists for the
     # Gateway's rate-limit/budget/router state (ADR 0007), not for this.
     # Entries survive a Gateway restart; `make clean` flushes them.
     cache: true
@@ -136,7 +137,7 @@ general_settings:
     trusted_proxy_ranges:
         - "10.0.0.11/32"
 
-# Router state shared through the same Redis: deployment cooldowns, usage- and
+# Router state shared through the same Valkey (Redis protocol): deployment cooldowns, usage- and
 # latency-based routing counters, rate-limit and budget accounting. Separate
 # from cache_params above -- LiteLLM does not derive one from the other, and
 # leaving this out is what keeps the "No Redis configured" banner up even with

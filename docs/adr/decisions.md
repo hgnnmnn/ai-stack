@@ -217,9 +217,9 @@ Backend call, two identical chat requests made two.
   replays its stored answer for the full `ttl` (600s) as before, but
   `make restart` no longer clears it — "regenerate" in a Client returning
   identical text at `--temp 1.0` is now true across runs, not just within one.
-  `make clean` (`down -v`) drops `redis-data` for a genuine flush.
+  `make clean` (`down -v`) drops `valkey-data` for a genuine flush.
 - **Redis is a cache, not a database.** Keys and spend stay in Postgres.
-  Losing `redis-data` costs a cold cache and reset counters, nothing durable.
+  Losing `valkey-data` costs a cold cache and reset counters, nothing durable.
   Configured to match: `maxmemory 512mb` with `allkeys-lru`, and
   `stop-writes-on-bgsave-error no` so a failed snapshot degrades to "not
   persisted" instead of Redis rejecting writes and taking rate limiting down
@@ -234,6 +234,16 @@ Backend call, two identical chat requests made two.
 - **A broken Redis is now a broken Gateway,** not a degraded one, via
   `depends_on: service_healthy`. Accepted: a Gateway with no rate limiting is
   not a state worth staying up in at this scale.
+
+### Update (2026-11-01): Valkey instead of Redis
+
+The `redis` service is now `valkey` (`valkey/valkey`, BSD-licensed fork of
+Redis 7.2, same wire protocol). Nothing on the LiteLLM side changes:
+`cache_params.type` stays `redis` and the `REDIS_*` env vars keep their names,
+because those are LiteLLM's client settings, not the server's. "Redis" above
+means "the Redis-protocol store". The volume is renamed to `valkey-data`
+rather than reused — Redis 8 writes an RDB format Valkey cannot load, and
+everything in it is disposable anyway (cold cache, reset counters).
 
 ## ADR 0008 — Qwen2.5-Coder-7B, not Codestral-22B, as the FIM Backend model
 

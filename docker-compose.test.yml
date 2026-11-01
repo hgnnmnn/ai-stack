@@ -76,5 +76,5 @@ services:
                 condition: service_healthy
             postgres:
                 condition: service_healthy
-            redis:
+            valkey:
                 condition: service_healthy

@@ -86,12 +86,12 @@ spend_log_count() {
   [ "$persisted" -ge "$after" ]
 }
 
-# The response cache is Redis-backed and scoped to raw completions and
+# The response cache is Valkey-backed and scoped to raw completions and
 # embeddings (litellm/config.yaml.tmpl cache_params, ADR 0007). The stub mints
 # a fresh id per call, so an identical second request coming back with the
-# same id means it was served out of Redis, not from the Backend.
-@test "identical text completions are served from the Redis response cache" {
-  body='{"model": "llama-fim", "prompt": "redis cache probe", "max_tokens": 4}'
+# same id means it was served out of Valkey, not from the Backend.
+@test "identical text completions are served from the Valkey response cache" {
+  body='{"model": "llama-fim", "prompt": "valkey cache probe", "max_tokens": 4}'
 
   run curl -sf -X POST "$GATEWAY/v1/completions" \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \

@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # -p keeps this off the default `ai-stack` project: the `down -v` below would
-# otherwise delete the running prod stack's Postgres/Redis volumes.
+# otherwise delete the running prod stack's Postgres/Valkey volumes.
 export COMPOSE
 COMPOSE="docker compose -p ai-stack-test -f docker-compose.yml -f docker-compose.test.yml --env-file tests/test.env"
 

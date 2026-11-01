@@ -35,7 +35,7 @@ graph TD
     subgraph "Host (Docker Compose)"
         GW["Gateway: LiteLLM\nport 4000"]
         PG["(Postgres 18)"]
-        RD["(Redis)"]
+        RD["(Valkey)"]
         L1["llama-chat\nport 8001"]
         L2["llama-coder\nport 8002"]
         L3["llama-fim\nport 8004"]
@@ -56,13 +56,14 @@ graph TD
 ```
 
 Gateway is LAN-facing on `:4000` (reverse proxy terminates TLS, forwards
-`/v1/*`). Postgres (Keys/spend) and Redis (response cache, rate-limit and
+`/v1/*`). Postgres (Keys/spend) and Valkey (response cache, rate-limit and
 budget counters, router state) are internal only, with no published port at
 all. Everything else — the Backends — binds `127.0.0.1` only.
 
-Postgres is the system of record; Redis is not. Losing the Redis volume costs
+Postgres is the system of record; Valkey is not. Losing the Valkey volume costs
 a cold response cache and reset rate-limit counters, nothing durable. LiteLLM
-has warned since v1.98.0 when it runs without Redis, because every one of
+has warned since v1.98.0 when it runs without Redis (Valkey speaks the same
+protocol and is what we point it at), because every one of
 those is otherwise per-worker — see
 [Redis requirements](https://docs.litellm.ai/docs/proxy/redis_requirements)
 and [ADR 0007](docs/adr/decisions.md#adr-0007--redis-for-gateway-shared-state-even-though-this-runs-a-single-worker).
@@ -208,7 +209,7 @@ per machine, not per container.
 2. `docker compose up -d llama-chat`, test `http://127.0.0.1:8001/v1/chat/completions`.
 3. `docker compose up -d llama-coder`, test `http://127.0.0.1:8002/v1/chat/completions`.
 4. `docker compose up -d llama-fim`, test `http://127.0.0.1:8004/v1/completions` (raw FIM prompt).
-5. `docker compose up -d` for the rest (litellm, postgres, redis).
+5. `docker compose up -d` for the rest (litellm, postgres, valkey).
 
 ### Issuing Keys
 
@@ -237,14 +238,14 @@ make test
 Renders `tests/litellm-config.yaml` from `tests/test.env` (it carries minimal
 `*_ARGS` with `--ctx-size`/`--parallel` for the renderer, and
 `LITELLM_CONFIG_FILE` so the live Gateway's `litellm/config.yaml` is never
-touched), then brings up litellm + Postgres + Redis alongside stub
+touched), then brings up litellm + Postgres + Valkey alongside stub
 Backends (`docker-compose.test.yml`) and runs `tests/*.bats` against them.
 Requires [bats](https://github.com/bats-core/bats-core) on `PATH`.
 
 The suite runs in its own compose project (`-p ai-stack-test`) on a remapped
 localhost port (4100), so it is safe to run while the real stack
 is up — its teardown is `down -v`, which under the default project name would
-delete the live Postgres/Redis volumes.
+delete the live Postgres/Valkey volumes.
 
 ## Acknowledgements
 

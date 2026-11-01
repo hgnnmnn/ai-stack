@@ -68,5 +68,5 @@ stats: ## Snapshot memory/CPU usage of both Backends (see README: Memory budget)
 test: ## Run the integration test suite against stub Backends
 	tests/run.sh
 
-clean: ## Stop the stack and DELETE its volumes (Postgres/Redis data)
+clean: ## Stop the stack and DELETE its volumes (Postgres/Valkey data)
 	$(COMPOSE) down -v
