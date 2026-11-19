@@ -1,6 +1,6 @@
 services:
     litellm:
-        image: ghcr.io/berriai/litellm-database:1.110.0
+        image: ghcr.io/berriai/litellm-database:1.110.1
         restart: unless-stopped
         ports:
             - "4000:4000"
