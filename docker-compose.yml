@@ -50,7 +50,7 @@ services:
     # Password passed through the shell rather than inline so it doesn't land
     # in `make config` output. Internal only, no published port.
     valkey:
-        image: valkey/valkey:9.1.3-alpine
+        image: valkey/valkey:9.2.0-alpine
         restart: unless-stopped
         environment:
             REDIS_PASSWORD: ${REDIS_PASSWORD}
